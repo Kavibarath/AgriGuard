@@ -1,0 +1,30 @@
+# Local development stack. Services are added as each part of the system is built:
+#   now:   postgres
+#   later: api, agent, ollama
+#
+# Usage:  copy .env.example .env   (then edit values)
+#         docker compose up -d
+name: agriguard
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agriguard}
+      POSTGRES_USER: ${POSTGRES_USER:-agriguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      # Bound to localhost only: the database is never exposed on the network.
+      # Host port defaults to 5433 so it cannot collide with a natively installed PostgreSQL on 5432.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

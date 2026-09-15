@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AgriGuard.Api/AgriGuard.Api.csproj" />
+    <Project Path="src/AgriGuard.Application/AgriGuard.Application.csproj" />
+    <Project Path="src/AgriGuard.Domain/AgriGuard.Domain.csproj" />
+    <Project Path="src/AgriGuard.Infrastructure/AgriGuard.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AgriGuard.IntegrationTests/AgriGuard.IntegrationTests.csproj" />
+    <Project Path="tests/AgriGuard.UnitTests/AgriGuard.UnitTests.csproj" />
+  </Folder>
+</Solution>
