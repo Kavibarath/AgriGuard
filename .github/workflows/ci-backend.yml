@@ -1,0 +1,113 @@
+# Backend CI (§13): every push to main and every PR must restore, build warning-free, pass
+# formatting, have no un-migrated model changes, and pass all tests before it can merge.
+name: ci-backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "global.json"
+      - "dotnet-tools.json"
+      - ".editorconfig"
+      - ".github/workflows/ci-backend.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "global.json"
+      - "dotnet-tools.json"
+      - ".editorconfig"
+      - ".github/workflows/ci-backend.yml"
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes a run still in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+  SOLUTION: backend/AgriGuard.slnx
+  CONFIGURATION: Release
+
+jobs:
+  build-and-test:
+    name: Build, check and test
+    # ubuntu-latest ships Docker, which the integration tests use through Testcontainers to start
+    # the same postgres:17-alpine image as docker-compose — CI tests exactly what runs locally.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write # test-reporter publishes the per-test results as a check
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up .NET (version from global.json)
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('backend/**/*.csproj', 'dotnet-tools.json', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore tools and packages
+        run: |
+          dotnet tool restore
+          dotnet restore "$SOLUTION"
+
+      - name: Check formatting
+        # Generated migrations are excluded: they are not hand-written and must never be edited to satisfy a linter.
+        run: dotnet format "$SOLUTION" --verify-no-changes --no-restore --exclude "**/Migrations/**"
+
+      - name: Build (warnings are errors)
+        run: dotnet build "$SOLUTION" --no-restore -c "$CONFIGURATION" -p:TreatWarningsAsErrors=true -p:ContinuousIntegrationBuild=true
+
+      - name: Check for un-migrated model changes
+        # Fails when an entity was changed without `dotnet ef migrations add`. Only builds the EF
+        # model — no database is contacted — but the startup project still needs config to boot.
+        env:
+          ConnectionStrings__Default: "Host=localhost;Port=1;Database=ci;Username=ci;Password=ci"
+          Jwt__SigningKey: "ci-only-placeholder-not-a-secret-0123456789abcdef"
+        run: >
+          dotnet tool run dotnet-ef migrations has-pending-model-changes
+          --project backend/src/AgriGuard.Infrastructure
+          --startup-project backend/src/AgriGuard.Api
+          --configuration "$CONFIGURATION" --no-build
+
+      - name: Test
+        run: >
+          dotnet test "$SOLUTION" --no-build -c "$CONFIGURATION"
+          --logger "trx"
+          --results-directory artifacts/test-results
+          --collect "XPlat Code Coverage"
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v3.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: Backend tests
+          path: artifacts/test-results/*.trx
+          reporter: dotnet-trx
+          fail-on-error: true
+
+      - name: Upload test results and coverage
+        uses: actions/upload-artifact@v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: backend-test-results
+          path: artifacts/test-results
+          retention-days: 14

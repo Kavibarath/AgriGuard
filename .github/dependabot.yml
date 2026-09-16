@@ -1,0 +1,23 @@
+# Keeps action pins and NuGet packages current with one grouped PR a week instead of a flood.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directories:
+      - /backend/src/*
+      - /backend/tests/*
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      # Patch and minor bumps arrive together; majors stay separate so they get a real look.
+      nuget-minor-and-patch:
+        update-types: [minor, patch]
