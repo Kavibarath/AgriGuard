@@ -23,6 +23,8 @@ public static class DependencyInjection
             .UseAsyncSeeding((context, _, ct) =>
                 ReferenceDataSeeder.SeedAsync((AgriGuardDbContext)context, ct)));
 
+        services.AddHealthChecks().AddDbContextCheck<AgriGuardDbContext>("database");
+
         return services;
     }
 }
