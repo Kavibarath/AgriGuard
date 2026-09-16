@@ -1,3 +1,5 @@
+using AgriGuard.Domain.Identity;
+
 namespace AgriGuard.Application.Common.Interfaces;
 
 /// <summary>
@@ -7,4 +9,11 @@ namespace AgriGuard.Application.Common.Interfaces;
 public interface ICurrentUserAccessor
 {
     Guid? UserId { get; }
+
+    UserRole? Role { get; }
+
+    /// <summary>District from the token; scopes an agronomist's view of cases.</summary>
+    Guid? DistrictId { get; }
+
+    string? Email { get; }
 }

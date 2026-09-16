@@ -48,6 +48,7 @@ public sealed class GlobalExceptionHandler(
             Title = "Validation failed",
             Detail = e.Message
         },
+        AuthenticationFailedException e => Problem(StatusCodes.Status401Unauthorized, "Authentication failed", e.Message),
         NotFoundException e => Problem(StatusCodes.Status404NotFound, "Resource not found", e.Message),
         ForbiddenAccessException e => Problem(StatusCodes.Status403Forbidden, "Forbidden", e.Message),
         ConflictException e => Problem(StatusCodes.Status409Conflict, "Conflict", e.Message),

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\AgriGuard.Application\AgriGuard.Application.csproj" />
     <ProjectReference Include="..\..\src\AgriGuard.Domain\AgriGuard.Domain.csproj" />
+    <ProjectReference Include="..\..\src\AgriGuard.Infrastructure\AgriGuard.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

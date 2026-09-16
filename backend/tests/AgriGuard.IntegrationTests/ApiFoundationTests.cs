@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using AgriGuard.Domain.Identity;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -50,12 +52,28 @@ public sealed class ApiFoundationTests(AgriGuardApiFactory factory)
     }
 
     [Fact]
-    public async Task Unknown_route_returns_problem_details_404()
+    public async Task Unknown_route_returns_problem_details_404_to_an_authenticated_caller()
     {
-        var response = await _client.GetAsync("/api/does-not-exist");
+        var user = await factory.CreateUserAsync(UserRole.Farmer);
+        var login = await _client.PostAsJsonAsync("/api/auth/login",
+            new { email = user.Email, password = AgriGuardApiFactory.TestPassword });
+        var token = (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accessToken").GetString();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/does-not-exist");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _client.SendAsync(request);
 
         var problem = await AssertProblem(response, HttpStatusCode.NotFound);
         Assert.True(problem.TryGetProperty("traceId", out _));
+    }
+
+    [Fact]
+    public async Task Unknown_route_returns_401_to_an_anonymous_caller()
+    {
+        // The fallback policy covers unmatched routes too, so anonymous probing cannot map which routes exist.
+        var response = await _client.GetAsync("/api/does-not-exist");
+
+        await AssertProblem(response, HttpStatusCode.Unauthorized);
     }
 
     [Theory]

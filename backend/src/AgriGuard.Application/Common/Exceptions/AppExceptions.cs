@@ -15,6 +15,13 @@ public sealed class NotFoundException(string resource, object key)
 public sealed class ForbiddenAccessException(string message = "You do not have access to this resource.")
     : AppException(message);
 
+/// <summary>
+/// 401 — bad credentials, a disabled account, or an invalid/expired refresh token.
+/// The message is deliberately vague: telling a caller which half was wrong helps account enumeration.
+/// </summary>
+public sealed class AuthenticationFailedException(string message = "Invalid credentials.")
+    : AppException(message);
+
 /// <summary>409 — the request conflicts with current state (duplicate, stale version, already decided).</summary>
 public sealed class ConflictException(string message) : AppException(message);
 
