@@ -1,4 +1,5 @@
 using AgriGuard.Application.Common.Exceptions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgriGuard.IntegrationTests.Infrastructure;
@@ -9,6 +10,8 @@ namespace AgriGuard.IntegrationTests.Infrastructure;
 /// </summary>
 [ApiController]
 [Route("_test/faults")]
+// Exercises the exception pipeline, not authorization; the fallback policy would otherwise 401 these.
+[AllowAnonymous]
 public sealed class FaultsController : ControllerBase
 {
     [HttpGet("not-found")]

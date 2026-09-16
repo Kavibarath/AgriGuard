@@ -1,3 +1,5 @@
+using AgriGuard.Application.Auth;
+using AgriGuard.Domain.Identity;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -14,6 +16,11 @@ namespace AgriGuard.IntegrationTests.Infrastructure;
 /// </summary>
 public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    /// <summary>Test-only signing key (32 bytes). Tests forge tokens with a different key to prove they are rejected.</summary>
+    public const string SigningKey = "dGVzdC1vbmx5LWtleS1kby1ub3QtdXNlLWluLXByb2Q=";
+
+    public const string TestPassword = "Test!Password1";
+
     // Same major version as docker-compose.yml, so tests exercise what we run locally.
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
 
@@ -31,10 +38,47 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
         // redirect the tests at the developer's real database.
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Default", _postgres.GetConnectionString());
+        builder.UseSetting("Jwt:SigningKey", SigningKey);
 
-        // Test-only controllers (e.g. FaultsController) live in this assembly.
+        // Every test shares one loopback address, so the real 10-per-minute auth bucket would
+        // throttle unrelated tests. The rate-limit test lowers this again for itself.
+        builder.UseSetting("RateLimiting:Auth:PermitLimit", "10000");
+
+        // Test-only controllers (FaultsController, SecureController) live in this assembly.
         builder.ConfigureTestServices(services =>
             services.AddControllers().AddApplicationPart(typeof(AgriGuardApiFactory).Assembly));
+    }
+
+    /// <summary>Creates an active user with a known password. Emails are unique per call so tests stay independent.</summary>
+    public async Task<User> CreateUserAsync(
+        UserRole role,
+        bool isActive = true,
+        bool withDistrict = true,
+        string password = TestPassword)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AgriGuardDbContext>();
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+
+        var user = new User
+        {
+            Email = $"{role}.{Guid.NewGuid():N}@test.local".ToLowerInvariant(),
+            FullName = $"Test {role}",
+            Role = role,
+            IsActive = isActive,
+            DistrictId = withDistrict ? await db.Districts.Select(d => d.Id).FirstAsync() : null,
+            PasswordHash = hasher.Hash(password)
+        };
+
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user;
+    }
+
+    public async Task<T> QueryAsync<T>(Func<AgriGuardDbContext, Task<T>> query)
+    {
+        using var scope = Services.CreateScope();
+        return await query(scope.ServiceProvider.GetRequiredService<AgriGuardDbContext>());
     }
 
     public new async Task DisposeAsync()
