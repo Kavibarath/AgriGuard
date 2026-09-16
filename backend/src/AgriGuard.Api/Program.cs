@@ -1,4 +1,8 @@
+using System.Text.Json.Serialization;
+using AgriGuard.Api.Authentication;
+using AgriGuard.Api.Authorization;
 using AgriGuard.Api.Infrastructure;
+using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
@@ -19,15 +23,20 @@ try
         .ReadFrom.Services(services)
         .Enrich.FromLogContext());
 
-    // Connection string comes from user-secrets locally and environment variables in the cloud —
-    // never from a committed appsettings file.
-    var connectionString = builder.Configuration.GetConnectionString("Default")
-        ?? throw new InvalidOperationException(
-            "Connection string 'Default' is not configured. Locally run: " +
-            "dotnet user-secrets set \"ConnectionStrings:Default\" \"<connection string>\" --project backend/src/AgriGuard.Api");
+    builder.Services.AddInfrastructure(builder.Configuration);
 
-    builder.Services.AddInfrastructure(connectionString);
-    builder.Services.AddControllers();
+    // Enums travel as names ("FieldAgronomist"), not ordinals: readable for React/Flutter, and
+    // reordering an enum can never silently change what a client receives.
+    builder.Services.AddControllers().AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
+    builder.Services.AddAgriGuardAuthentication();
+    builder.Services.AddAgriGuardAuthorization();
+    builder.Services.AddAgriGuardRateLimiting(builder.Configuration);
 
     // Every error response — thrown exceptions, empty 404/405s, model-binding 400s — is RFC 7807,
     // stamped with IDs a user can quote and we can find in the logs.
@@ -68,7 +77,7 @@ try
     // Kept on outside Development on purpose: the assignment submits a live /swagger URL.
     if (app.Configuration.GetValue("Swagger:Enabled", true))
     {
-        app.MapOpenApi();
+        app.MapOpenApi().AllowAnonymous();
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/openapi/v1.json", "AgriGuard API v1");
@@ -82,15 +91,19 @@ try
     if (!app.Environment.IsDevelopment())
         app.UseHttpsRedirection();
     app.UseCors();
+    app.UseRateLimiter();
+    app.UseAuthentication();
     app.UseAuthorization();
 
+    // Probes must stay reachable without a token — the fallback policy would otherwise 401 them.
     // /health/live: the process is up (no dependencies). /health: the API can reach PostgreSQL.
     app.MapHealthChecks("/health/live", new HealthCheckOptions
     {
         Predicate = _ => false,
         ResponseWriter = HealthResponseWriter.WriteAsync
-    });
-    app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = HealthResponseWriter.WriteAsync });
+    }).AllowAnonymous();
+    app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = HealthResponseWriter.WriteAsync })
+        .AllowAnonymous();
     app.MapControllers();
 
     app.Run();
