@@ -1,0 +1,19 @@
+# Extends gitleaks' default rules; only the allowlist below is ours.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Deliberately public, non-secret values"
+regexes = [
+  # Test-only JWT signing key in AgriGuardApiFactory: 32 fixed bytes so tests can forge tokens
+  # with a *different* key and prove they are rejected. Never used outside the test host.
+  '''dGVzdC1vbmx5LWtleS1kby1ub3QtdXNlLWluLXByb2Q=''',
+  # Demo account password seeded only when Seed:DemoUsers is on; documented in the report.
+  '''AgriGuard!Demo1''',
+  # CI placeholder that lets the EF model build without a real key (ci-backend.yml).
+  '''ci-only-placeholder-not-a-secret''',
+]
+paths = [
+  # Example env file: placeholders by definition.
+  '''^\.env\.example$''',
+]
