@@ -1,4 +1,6 @@
-# Keeps action pins and NuGet packages current with one grouped PR a week instead of a flood.
+# Keeps action pins and package versions current with one grouped PR per ecosystem per week
+# instead of a flood. Majors are included in the group: with CI green on the PR they are safe
+# to review together, and a separate PR per package proved noisy on day one.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -18,6 +20,23 @@ updates:
       interval: weekly
       day: monday
     groups:
-      # Patch and minor bumps arrive together; majors stay separate so they get a real look.
-      nuget-minor-and-patch:
-        update-types: [minor, patch]
+      nuget:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      npm:
+        patterns: ["*"]
+
+  - package-ecosystem: pub
+    directory: /mobile
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      pub:
+        patterns: ["*"]

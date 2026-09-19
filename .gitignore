@@ -519,3 +519,6 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Claude Code harness config (dev-machine only)
+.claude/
