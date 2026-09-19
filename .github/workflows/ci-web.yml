@@ -1,0 +1,65 @@
+# React CI (§13): lint, typecheck, test and a production build on every change under web/.
+name: ci-web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/ci-web.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/ci-web.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Lint, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install (exact lockfile)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint -- --deny-warnings
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        # The API URL is injected at build time; Vercel sets VITE_API_BASE_URL for the real build.
+        run: npm run build
+
+      - name: Upload build
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 7

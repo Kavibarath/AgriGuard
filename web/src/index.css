@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Design tokens. Green for the brand, amber for warnings (spray/PHI), red for hard rejects. */
+@theme {
+  --color-brand-50: #f0f9f1;
+  --color-brand-100: #dcf1de;
+  --color-brand-500: #2f855a;
+  --color-brand-600: #276749;
+  --color-brand-700: #22543d;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    @apply bg-stone-50 text-stone-900 antialiased;
+  }
+}

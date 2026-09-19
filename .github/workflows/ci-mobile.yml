@@ -1,0 +1,72 @@
+# Flutter CI (§13): analyze, test and build the release APK on every change under mobile/.
+# The uploaded APK is the submission artifact (§14).
+name: ci-mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ci-mobile.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/ci-mobile.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-test-build:
+    name: Analyze, test and build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Java (Android Gradle Plugin needs 17)
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Flutter (same version as the dev machines)
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.3
+          cache: true
+
+      - name: Install packages
+        run: flutter pub get
+
+      - name: Analyze (infos are errors — keep the tree clean)
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release APK
+        # API_BASE_URL is a repository variable (Settings → Secrets and variables → Actions → Variables),
+        # set once the API is deployed on Render. Until then the APK points at the placeholder.
+        run: >
+          flutter build apk --release
+          --dart-define=API_BASE_URL=${{ vars.API_BASE_URL || 'https://api.agriguard.invalid' }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: agriguard-mobile-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
