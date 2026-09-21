@@ -2,17 +2,13 @@
 # The uploaded APK is the submission artifact (§14).
 name: ci-mobile
 
+# No `paths:` filter — see the note in ci-backend.yml: required checks must always report.
+# This is the slowest job (~6 min for the APK); it still runs on every PR so it can gate merges.
 on:
   push:
     branches: [main]
-    paths:
-      - "mobile/**"
-      - ".github/workflows/ci-mobile.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "mobile/**"
-      - ".github/workflows/ci-mobile.yml"
   workflow_dispatch:
 
 concurrency:

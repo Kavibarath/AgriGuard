@@ -1,17 +1,12 @@
 # React CI (§13): lint, typecheck, test and a production build on every change under web/.
 name: ci-web
 
+# No `paths:` filter — see the note in ci-backend.yml: required checks must always report.
 on:
   push:
     branches: [main]
-    paths:
-      - "web/**"
-      - ".github/workflows/ci-web.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "web/**"
-      - ".github/workflows/ci-web.yml"
   workflow_dispatch:
 
 concurrency:
