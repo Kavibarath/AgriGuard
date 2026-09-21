@@ -2,23 +2,14 @@
 # formatting, have no un-migrated model changes, and pass all tests before it can merge.
 name: ci-backend
 
+# No `paths:` filter on purpose. This check is required to merge, and a filtered workflow that
+# never runs leaves its required check pending forever, blocking unrelated PRs. The repo is
+# public, so Actions minutes are free; a wasted 1.5-minute run beats an unmergeable PR.
 on:
   push:
     branches: [main]
-    paths:
-      - "backend/**"
-      - "global.json"
-      - "dotnet-tools.json"
-      - ".editorconfig"
-      - ".github/workflows/ci-backend.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "backend/**"
-      - "global.json"
-      - "dotnet-tools.json"
-      - ".editorconfig"
-      - ".github/workflows/ci-backend.yml"
   workflow_dispatch:
 
 # A newer push to the same branch supersedes a run still in progress.
