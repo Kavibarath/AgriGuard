@@ -1,6 +1,11 @@
 # Keeps action pins and package versions current with one grouped PR per ecosystem per week
-# instead of a flood. Majors are included in the group: with CI green on the PR they are safe
-# to review together, and a separate PR per package proved noisy on day one.
+# instead of a flood.
+#
+# Majors are ignored until after the SE3090 submission (30 Sept 2026): swapping a compiler
+# (typescript 7) or a test runner (xunit.runner.visualstudio 4, which targets xunit v3 while the
+# test projects are on 2.9) mid-assignment costs more than it returns. Delete the `ignore:` blocks
+# afterwards to let majors through again. Written out per ecosystem rather than with YAML anchors,
+# which Dependabot's config schema does not accept.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,6 +16,9 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: nuget
     directories:
@@ -22,6 +30,9 @@ updates:
     groups:
       nuget:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /web
@@ -31,6 +42,9 @@ updates:
     groups:
       npm:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pub
     directory: /mobile
@@ -40,3 +54,6 @@ updates:
     groups:
       pub:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
