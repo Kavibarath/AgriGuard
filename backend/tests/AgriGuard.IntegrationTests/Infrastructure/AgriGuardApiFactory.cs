@@ -54,7 +54,8 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
         UserRole role,
         bool isActive = true,
         bool withDistrict = true,
-        string password = TestPassword)
+        string password = TestPassword,
+        Guid? districtId = null)
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgriGuardDbContext>();
@@ -66,7 +67,7 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
             FullName = $"Test {role}",
             Role = role,
             IsActive = isActive,
-            DistrictId = withDistrict ? await db.Districts.Select(d => d.Id).FirstAsync() : null,
+            DistrictId = withDistrict ? districtId ?? await db.Districts.Select(d => d.Id).FirstAsync() : null,
             PasswordHash = hasher.Hash(password)
         };
 

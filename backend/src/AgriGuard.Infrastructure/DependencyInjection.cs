@@ -1,7 +1,9 @@
 using AgriGuard.Application.Auth;
+using AgriGuard.Application.Registry;
 using AgriGuard.Infrastructure.Identity;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
+using AgriGuard.Infrastructure.Registry;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +52,11 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddScoped<ITokenService, JwtTokenService>();
         services.AddScoped<IAuthService, AuthService>();
+
+        // Component A — registry
+        services.AddScoped<IFarmService, FarmService>();
+        services.AddScoped<IPlotService, PlotService>();
+        services.AddScoped<ICropCycleService, CropCycleService>();
 
         return services;
     }
