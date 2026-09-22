@@ -10,7 +10,7 @@ namespace AgriGuard.Api.Controllers;
 [ApiController]
 [Route("api/plots")]
 [Authorize(Policy = AuthPolicies.OwnsFarm)]
-public sealed class PlotsController(IPlotService plots) : ControllerBase
+public sealed class PlotsController(IPlotService plots, ISafetyProfileService safetyProfiles) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<PagedResult<PlotDto>>(StatusCodes.Status200OK)]
@@ -32,6 +32,22 @@ public sealed class PlotsController(IPlotService plots) : ControllerBase
         var plot = await plots.CreateAsync(request, ct);
         return CreatedAtAction(nameof(Get), new { id = plot.Id }, plot);
     }
+
+    /// <summary>
+    /// Non-CRUD (§5.1): the plot's chemical-safety position — days to harvest, what has been
+    /// applied to the growing crop per active ingredient, and for every approved product whether
+    /// it may still be sprayed today, with the date it becomes blocked and why.
+    ///
+    /// Read-only and derived: it computes from the ChemicalApplication history and the
+    /// ProductCropApproval rules table rather than storing anything. The Validation agent's
+    /// deterministic rules V5, V6 and V7 are checked against exactly these numbers.
+    /// </summary>
+    [HttpGet("{id:guid}/safety-profile")]
+    [ProducesResponseType<PlotSafetyProfileDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public Task<PlotSafetyProfileDto> SafetyProfile(Guid id, CancellationToken ct) =>
+        safetyProfiles.GetAsync(id, ct);
 
     /// <summary>422 if the change would invalidate an active cycle (area is locked while growing).</summary>
     [HttpPut("{id:guid}")]
