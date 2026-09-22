@@ -1,9 +1,11 @@
 using AgriGuard.Application.Auth;
 using AgriGuard.Application.Registry;
+using AgriGuard.Application.Validation;
 using AgriGuard.Infrastructure.Identity;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
 using AgriGuard.Infrastructure.Registry;
+using AgriGuard.Infrastructure.Validation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,6 +59,9 @@ public static class DependencyInjection
         services.AddScoped<IFarmService, FarmService>();
         services.AddScoped<IPlotService, PlotService>();
         services.AddScoped<ICropCycleService, CropCycleService>();
+
+        // Component A — the deterministic safety gate every agent proposal passes through
+        services.AddScoped<IPrescriptionValidationService, PrescriptionValidationService>();
 
         return services;
     }
