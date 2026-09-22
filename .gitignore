@@ -522,3 +522,12 @@ Thumbs.db
 
 # Claude Code harness config (dev-machine only)
 .claude/
+
+# Python (agent service)
+agent/.venv/
+agent/**/__pycache__/
+agent/.pytest_cache/
+agent/.mypy_cache/
+agent/.ruff_cache/
+agent/*.egg-info/
+agent/.env

@@ -1,0 +1,45 @@
+[project]
+name = "agriguard-agent"
+version = "0.1.0"
+description = "AgriGuard agentic AI service: a controlled LangGraph workflow that proposes crop treatments for human approval."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.28",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "langgraph>=0.2.60",
+    "structlog>=24.4",
+]
+
+[project.optional-dependencies]
+# An extra rather than a PEP 735 dependency-group, so `pip install -e ".[dev]"` works on any
+# recent pip — including the one on the CI runner.
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "respx>=0.22",
+    "ruff>=0.8",
+    "mypy>=1.14",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+# LangGraph ships partial stubs; its decorators would otherwise force Any through the graph.
+[[tool.mypy.overrides]]
+module = ["langgraph.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
