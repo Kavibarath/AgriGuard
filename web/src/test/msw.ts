@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { API_BASE_URL } from '@/lib/api'
 import type { AuthResponse, UserSummary } from '@/features/auth/types'
+import { registryHandlers } from './registry-handlers'
 
 export const agronomist: UserSummary = {
   id: '01a0aaaf-a87a-736a-a322-4f4782a9b594',
@@ -57,5 +58,8 @@ export const handlers = [
   }),
 ]
 
-export const server = setupServer(...handlers)
+// Base handlers cover auth and the registry; a test overrides just what it is about with
+// server.use(). They are part of the server's base set (not a server.use call at import time)
+// so that resetHandlers() between tests restores them rather than removing them.
+export const server = setupServer(...handlers, ...registryHandlers)
 export { http, HttpResponse, problem }
