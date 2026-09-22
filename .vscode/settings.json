@@ -1,0 +1,25 @@
+{
+  // Build artefacts and packages are noise in search and the file tree.
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/node_modules": true,
+    "**/.dart_tool": true
+  },
+  "search.exclude": {
+    "**/package-lock.json": true,
+    "**/pubspec.lock": true,
+    "**/*.Designer.cs": true,
+    "**/Migrations/**": true
+  },
+
+  "dotnet.defaultSolution": "backend/AgriGuard.slnx",
+
+  // .editorconfig sets LF and the C# style; formatting on save keeps the CI format gate green.
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "[csharp]": { "editor.defaultFormatter": "ms-dotnettools.csharp" },
+
+  "dart.flutterSdkPath": "D:\\flutter",
+  "dart.lineLength": 100
+}
