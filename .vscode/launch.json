@@ -1,0 +1,74 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API",
+      "detail": "ASP.NET Core on http://localhost:5000 (Swagger at /swagger)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build: backend",
+      "program": "${workspaceFolder}/backend/src/AgriGuard.Api/bin/Debug/net10.0/AgriGuard.Api.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/backend/src/AgriGuard.Api",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000"
+      },
+      // Connection string and JWT signing key come from user-secrets, never from here.
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+        "uriFormat": "%s/swagger"
+      },
+      "console": "internalConsole"
+    },
+    {
+      "name": "Web (Chrome)",
+      "detail": "Starts Vite, then opens the React app with breakpoints attached",
+      "type": "chrome",
+      "request": "launch",
+      "preLaunchTask": "web: dev",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/web/src",
+      "sourceMapPathOverrides": {
+        "/@fs/*": "*",
+        "/src/*": "${workspaceFolder}/web/src/*"
+      }
+    },
+    {
+      "name": "Mobile (emulator)",
+      "detail": "Flutter app pointed at the API on the host machine",
+      "type": "dart",
+      "request": "launch",
+      "program": "mobile/lib/main.dart",
+      "cwd": "${workspaceFolder}/mobile",
+      // 10.0.2.2 is the Android emulator's alias for the host's localhost.
+      // On a physical phone, change this to your PC's LAN address.
+      "args": ["--dart-define=API_BASE_URL=http://10.0.2.2:5000"]
+    },
+    {
+      "name": "Mobile (Chrome, quick check)",
+      "detail": "Runs the Flutter app in a browser — no emulator needed, but no camera/GPS",
+      "type": "dart",
+      "request": "launch",
+      "program": "mobile/lib/main.dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "deviceId": "chrome",
+      "args": ["--dart-define=API_BASE_URL=http://localhost:5000"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "▶ API + Web",
+      "detail": "The usual combination for working on the console",
+      "configurations": ["API", "Web (Chrome)"],
+      "stopAll": true
+    },
+    {
+      "name": "▶ API + Mobile",
+      "configurations": ["API", "Mobile (emulator)"],
+      "stopAll": true
+    }
+  ]
+}

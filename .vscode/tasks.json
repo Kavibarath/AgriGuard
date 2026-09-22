@@ -1,0 +1,93 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "db: up",
+      "detail": "Start PostgreSQL 17 on localhost:5433 (docker-compose)",
+      "type": "shell",
+      "command": "docker compose up -d",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared" }
+    },
+    {
+      "label": "db: down",
+      "detail": "Stop PostgreSQL (data is kept in the pgdata volume)",
+      "type": "shell",
+      "command": "docker compose down",
+      "problemMatcher": []
+    },
+    {
+      "label": "db: migrate + seed",
+      "detail": "Apply migrations and seed reference + demo data",
+      "type": "shell",
+      "command": "dotnet tool run dotnet-ef database update --project backend/src/AgriGuard.Infrastructure --startup-project backend/src/AgriGuard.Api",
+      "dependsOn": "db: up",
+      "problemMatcher": []
+    },
+    {
+      "label": "build: backend",
+      "type": "shell",
+      "command": "dotnet build backend/AgriGuard.slnx",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile",
+      "presentation": { "reveal": "silent" }
+    },
+    {
+      "label": "web: install",
+      "type": "shell",
+      "command": "npm ci",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "problemMatcher": []
+    },
+    {
+      "label": "web: dev",
+      "detail": "Vite dev server on http://localhost:5173",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          // Tells VS Code the task is "done starting" once Vite prints its ready line,
+          // so a browser launch can wait for the server instead of racing it.
+          "activeOnStart": true,
+          "beginsPattern": ".*VITE.*",
+          "endsPattern": ".*Local:.*"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "test: backend",
+      "type": "shell",
+      "command": "dotnet test backend/AgriGuard.slnx",
+      "detail": "Needs Docker running — integration tests start their own PostgreSQL",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "test: web",
+      "type": "shell",
+      "command": "npm test",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "test: mobile",
+      "type": "shell",
+      "command": "flutter test",
+      "options": { "cwd": "${workspaceFolder}/mobile" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "format: backend",
+      "detail": "Same check CI runs — fixes files in place",
+      "type": "shell",
+      "command": "dotnet format backend/AgriGuard.slnx --exclude \"**/Migrations/**\"",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  // VS Code offers these on first open of the repo (Extensions view → "Recommended").
+  "recommendations": [
+    "ms-dotnettools.csdevkit",          // C#, debugging, solution view
+    "ms-dotnettools.csharp",
+    "dart-code.flutter",                // brings in dart-code.dart-code
+    "dbaeumer.vscode-eslint",
+    "bradlc.vscode-tailwindcss",
+    "ms-azuretools.vscode-docker",
+    "editorconfig.editorconfig",        // honours our .editorconfig, keeps dotnet format happy
+    "github.vscode-github-actions",
+    "ms-vscode.vscode-github-issue-notebooks"
+  ]
+}

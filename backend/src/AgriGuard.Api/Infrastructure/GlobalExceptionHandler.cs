@@ -42,7 +42,9 @@ public sealed class GlobalExceptionHandler(
 
     private ProblemDetails Map(Exception exception) => exception switch
     {
-        RequestValidationException e => new HttpValidationProblemDetails(e.Errors)
+        // Keys are camelised centrally so a client sees the same field name whether the rule
+        // came from a FluentValidation validator or was thrown by a service.
+        RequestValidationException e => new HttpValidationProblemDetails(Camelise(e.Errors))
         {
             Status = StatusCodes.Status400BadRequest,
             Title = "Validation failed",
@@ -60,6 +62,14 @@ public sealed class GlobalExceptionHandler(
         _ => Problem(StatusCodes.Status500InternalServerError, "An unexpected error occurred",
             environment.IsDevelopment() ? exception.ToString() : null)
     };
+
+    /// <summary>Field names reach the client as camelCase, matching the JSON they sent.</summary>
+    private static Dictionary<string, string[]> Camelise(IDictionary<string, string[]> errors) =>
+        errors.ToDictionary(
+            pair => string.IsNullOrEmpty(pair.Key) || char.IsLower(pair.Key[0])
+                ? pair.Key
+                : char.ToLowerInvariant(pair.Key[0]) + pair.Key[1..],
+            pair => pair.Value);
 
     private static ProblemDetails Problem(int status, string title, string? detail) =>
         new() { Status = status, Title = title, Detail = detail };

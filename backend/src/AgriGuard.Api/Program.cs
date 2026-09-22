@@ -2,8 +2,10 @@ using System.Text.Json.Serialization;
 using AgriGuard.Api.Authentication;
 using AgriGuard.Api.Authorization;
 using AgriGuard.Api.Infrastructure;
+using AgriGuard.Api.Validation;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Infrastructure;
+using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 using Serilog.Events;
@@ -27,8 +29,13 @@ try
 
     // Enums travel as names ("FieldAgronomist"), not ordinals: readable for React/Flutter, and
     // reordering an enum can never silently change what a client receives.
-    builder.Services.AddControllers().AddJsonOptions(options =>
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    builder.Services
+        .AddControllers(options => options.Filters.Add<ValidationFilter>())
+        .AddJsonOptions(options =>
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+    // One validator class per request type, discovered from this assembly.
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTypes: true);
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
