@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using AgriGuard.Application.Auth;
 using AgriGuard.Infrastructure.Identity;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -11,7 +12,11 @@ public static class AuthenticationSetup
 {
     public static IServiceCollection AddAgriGuardAuthentication(this IServiceCollection services)
     {
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+        // JWT is the default: every user-facing endpoint. The agent key is opt-in, only for the
+        // /internal/* controllers whose policy names it.
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer()
+            .AddScheme<AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyDefaults.Scheme, null);
 
         // Configured through the options pattern so JwtOptions can be injected properly
         // (never call BuildServiceProvider() inside AddJwtBearer — it creates a second container).

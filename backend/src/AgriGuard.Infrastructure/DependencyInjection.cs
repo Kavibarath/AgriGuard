@@ -1,9 +1,14 @@
+using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
+using AgriGuard.Application.Cases;
 using AgriGuard.Application.Registry;
 using AgriGuard.Application.Validation;
+using AgriGuard.Infrastructure.Agent;
+using AgriGuard.Infrastructure.Cases;
 using AgriGuard.Infrastructure.Identity;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
+using AgriGuard.Infrastructure.Prescriptions;
 using AgriGuard.Infrastructure.Registry;
 using AgriGuard.Infrastructure.Validation;
 using Microsoft.EntityFrameworkCore;
@@ -64,6 +69,30 @@ public static class DependencyInjection
         // Component A — the deterministic safety gate every agent proposal passes through
         services.AddScoped<IPrescriptionValidationService, PrescriptionValidationService>();
 
+        // Component B — cases and the agent workflow
+        services.AddScoped<ICaseService, CaseService>();
+        services.AddScoped<IAgentRunService, AgentRunService>();
+        services.AddScoped<IAgentCallbackService, AgentCallbackService>();
+        services.AddScoped<IAgentToolService, AgentToolService>();
+        services.AddScoped<PrescriptionSafetyChecker>();
+
+        services.AddOptions<AgentServiceOptions>()
+            .Bind(configuration.GetSection(AgentServiceOptions.SectionName))
+            // Same reasoning as the JWT key: a missing agent key should stop deployment, not
+            // surface as every agent callback failing during the demo.
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<AgentServiceOptions>, AgentServiceOptionsValidator>();
+
+        services.AddHttpClient<IAgentDispatcher, HttpAgentDispatcher>((sp, http) =>
+        {
+            var agent = sp.GetRequiredService<IOptions<AgentServiceOptions>>().Value;
+            // A trailing slash, so a base URL with a path (https://host/agent) keeps it when "runs" is appended.
+            http.BaseAddress = new Uri(agent.BaseUrl.ToString().TrimEnd('/') + "/");
+            http.Timeout = agent.DispatchTimeout;
+        });
+
+        services.AddHostedService<AgentRunTimeoutSweeper>();
+
         return services;
     }
 
@@ -72,6 +101,9 @@ public static class DependencyInjection
         await ReferenceDataSeeder.SeedAsync(db, ct);
 
         if (seedDemoUsers)
+        {
             await DemoUserSeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), ct);
+            await DemoInventorySeeder.SeedAsync(db, TimeProvider.System, ct);
+        }
     }
 }

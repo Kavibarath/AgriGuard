@@ -11,6 +11,12 @@ public static class AgriGuardClaims
 
     /// <summary>District the user belongs to; scopes agronomist case access. Absent for users with no district.</summary>
     public const string DistrictId = "district";
+
+    /// <summary>
+    /// Carried only by the principal the X-Agent-Key handler creates. No JWT is ever issued with it,
+    /// so no user token can satisfy <see cref="AuthPolicies.AgentService"/>.
+    /// </summary>
+    public const string AgentService = "agent_service";
 }
 
 /// <summary>
@@ -30,4 +36,7 @@ public static class AuthPolicies
 
     /// <summary>Maintain regulatory rules, collection slots and users. Co-op Administrator only.</summary>
     public const string AdministersRules = "AdministersRules";
+
+    /// <summary>The /internal/* surface: the Python agent service, authenticated by X-Agent-Key. Never a user.</summary>
+    public const string AgentService = "AgentService";
 }

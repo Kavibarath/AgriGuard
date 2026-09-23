@@ -228,6 +228,8 @@ def build_graph(deps: GraphDependencies) -> Any:
         # reports what came back. This call is the whole of its authority here.
         raw = await tools.call(
             "validate_prescription",
+            # Rule V10 checks the proposal belongs to the case this run is resolving.
+            runId=state["run_id"],
             cropCycleId=state["case"]["cropCycleId"],
             productId=proposal.product_id,
             dosePerHectare=proposal.dose_per_hectare,
