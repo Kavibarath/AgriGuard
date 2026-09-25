@@ -1,11 +1,10 @@
 using System.Text.Json;
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Common.Exceptions;
-using AgriGuard.Application.Prescriptions;
 using AgriGuard.Domain.Cases;
+using AgriGuard.Domain.Validation;
 using AgriGuard.Infrastructure.Cases;
 using AgriGuard.Infrastructure.Persistence;
-using AgriGuard.Infrastructure.Prescriptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -21,7 +20,7 @@ namespace AgriGuard.Infrastructure.Agent;
 /// </summary>
 public sealed class AgentCallbackService(
     AgriGuardDbContext db,
-    PrescriptionSafetyChecker safetyChecker,
+    AgentPrescriptionGate prescriptionGate,
     TimeProvider timeProvider,
     ILogger<AgentCallbackService> logger) : IAgentCallbackService
 {
@@ -146,19 +145,30 @@ public sealed class AgentCallbackService(
             return;
         }
 
-        var verdict = await safetyChecker.CheckAsync(new PrescriptionProposalInput(
-            run.Id.ToString(),
-            run.Case.CropCycleId.ToString(),
-            ReadString(body, "product_id"),
-            ReadDecimal(body, "dose_per_hectare"),
-            ReadDecimal(body, "total_quantity"),
-            ReadString(body, "spray_date"),
-            ReadString(body, "dealer_id")), ct);
+        AgentVerdictTool verdict;
+        try
+        {
+            // Built from the run's own case, not from anything the agent says about where it applies.
+            verdict = await prescriptionGate.CheckAsync(new AgentProposalInput(
+                run.Id.ToString(),
+                run.Case.CropCycleId.ToString(),
+                ReadString(body, "product_id"),
+                ReadDecimal(body, "dose_per_hectare"),
+                ReadDecimal(body, "total_quantity"),
+                ReadString(body, "spray_date"),
+                ReadString(body, "dealer_id")), ct);
+        }
+        catch (AppException ex)
+        {
+            // E.g. the crop cycle ended while the agent was working. Still a recorded, safe failure.
+            AgentRunLifecycle.End(run, AgentRunStatus.Failed, $"The proposal could not be checked: {ex.Message}", now);
+            return;
+        }
 
         // The backend's verdict is the one stored and shown: it is the one that was actually enforced.
         run.VerdictJson = AgentPayloads.ToStorable(verdict);
 
-        if (verdict.Outcome != VerdictOutcome.Approved)
+        if (verdict.Outcome != ValidationOutcome.Approved)
         {
             logger.LogWarning("Agent run {RunId} reported an approvable proposal that failed the backend check: {Summary}", run.Id, verdict.Summary);
             AgentRunLifecycle.End(run, AgentRunStatus.Failed, $"The backend's check of the proposal did not pass ({verdict.Summary}), although the agent reported it as valid.", now);
@@ -225,7 +235,7 @@ public sealed class AgentCallbackService(
                 if (e.Payload is { ValueKind: JsonValueKind.Object } verdict
                     && verdict.TryGetProperty("outcome", out var verdictOutcome)
                     && verdictOutcome.ValueKind == JsonValueKind.String
-                    && verdictOutcome.GetString() == nameof(VerdictOutcome.Revise))
+                    && verdictOutcome.GetString() == nameof(ValidationOutcome.Revise))
                     run.Status = AgentRunStatus.RevisionRequested;
                 break;
 

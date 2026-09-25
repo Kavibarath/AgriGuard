@@ -8,7 +8,6 @@ using AgriGuard.Infrastructure.Cases;
 using AgriGuard.Infrastructure.Identity;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
-using AgriGuard.Infrastructure.Prescriptions;
 using AgriGuard.Infrastructure.Registry;
 using AgriGuard.Infrastructure.Validation;
 using Microsoft.EntityFrameworkCore;
@@ -64,7 +63,9 @@ public static class DependencyInjection
         services.AddScoped<IFarmService, FarmService>();
         services.AddScoped<IPlotService, PlotService>();
         services.AddScoped<ICropCycleService, CropCycleService>();
-        services.AddScoped<ISafetyProfileService, SafetyProfileService>();
+        // One instance per request serves both the user endpoint and the agent's tool.
+        services.AddScoped<SafetyProfileService>();
+        services.AddScoped<ISafetyProfileService>(sp => sp.GetRequiredService<SafetyProfileService>());
 
         // Component A — the deterministic safety gate every agent proposal passes through
         services.AddScoped<IPrescriptionValidationService, PrescriptionValidationService>();
@@ -74,7 +75,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentRunService, AgentRunService>();
         services.AddScoped<IAgentCallbackService, AgentCallbackService>();
         services.AddScoped<IAgentToolService, AgentToolService>();
-        services.AddScoped<PrescriptionSafetyChecker>();
+        services.AddScoped<AgentPrescriptionGate>();
 
         services.AddOptions<AgentServiceOptions>()
             .Bind(configuration.GetSection(AgentServiceOptions.SectionName))

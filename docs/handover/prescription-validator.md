@@ -103,9 +103,27 @@ and this endpoint's answers change with no deployment. The test
 dotnet test backend/tests/AgriGuard.UnitTests --filter "FullyQualifiedName~PrescriptionSafetyValidator"
 ```
 
+## How the agent reaches it
+
+The agent calls `POST /internal/tools/validate-prescription` with its `X-Agent-Key`. That route
+goes through `AgentPrescriptionGate` (`backend/src/AgriGuard.Infrastructure/Agent/`), which judges
+nothing itself. It:
+
+1. refuses a proposal for a crop cycle other than the one on the run's own case (422
+   `PROPOSAL_OUTSIDE_CASE`), which is the part of V10 only the agent path can know;
+2. passes a mangled product id or date through as empty, so this validator's V1 reports it
+   instead of the request failing with a 400;
+3. looks up the best dealer's in-date, unreserved stock and passes it in, so **V9 is always
+   evaluated** on the agent path. No stock is a V9 failure, not "not evaluated";
+4. trims the verdict to the fields the agent's `Verdict` model accepts (it forbids extras).
+
+The same gate runs a second time when the agent reports a proposal as ready for approval
+(`AgentCallbackService.AcceptProposalAsync`). If this validator does not return `Approved`, the run
+fails instead of reaching an agronomist, so a compromised agent cannot claim a pass.
+
 ## What is not done yet
 
-- `POST /internal/tools/validate-prescription` — the agent-facing route with its `X-Agent-Key`.
-  The logic is identical; only the authentication differs. It arrives with the agent tool surface.
-- V8 needs the Open-Meteo client; V9 needs Component C's inventory. Both already have their input
-  shapes defined, so wiring them is passing a populated record instead of `null`.
+- V8 needs the Open-Meteo client (Component D). Its input shape is already defined, so wiring it is
+  passing a populated `WeatherInput` instead of `null` in `AgentPrescriptionGate`.
+- On the user route (`/api/prescriptions/validate`), V9 is still only evaluated when the caller
+  supplies stock figures.

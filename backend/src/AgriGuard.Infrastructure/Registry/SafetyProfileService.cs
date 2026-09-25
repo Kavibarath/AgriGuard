@@ -1,3 +1,4 @@
+using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Registry;
 using AgriGuard.Domain.Registry;
@@ -17,11 +18,24 @@ public sealed class SafetyProfileService(
 {
     public async Task<PlotSafetyProfileDto> GetAsync(Guid plotId, CancellationToken ct = default)
     {
-        var plot = await db.Plots.AsNoTracking().ScopedTo(currentUser)
+        var visible = await db.Plots.AsNoTracking().ScopedTo(currentUser).AnyAsync(p => p.Id == plotId, ct);
+        if (!visible)
+            RegistryScope.EnsureVisible<object>(null, await db.Plots.AnyAsync(p => p.Id == plotId, ct), "Plot", plotId);
+
+        return await ComputeAsync(plotId, ct);
+    }
+
+    /// <summary>
+    /// The profile without the caller check. For the agent's plot-safety-profile tool, which has no
+    /// user and is authorised by its service key instead; users always come through <see cref="GetAsync"/>.
+    /// </summary>
+    internal async Task<PlotSafetyProfileDto> ComputeAsync(Guid plotId, CancellationToken ct = default)
+    {
+        var plot = await db.Plots.AsNoTracking()
             .Where(p => p.Id == plotId)
             .Select(p => new { p.Id, p.PlotCode, p.AreaHectares, FarmName = p.Farm.Name })
-            .FirstOrDefaultAsync(ct);
-        RegistryScope.EnsureVisible(plot, await db.Plots.AnyAsync(p => p.Id == plotId, ct), "Plot", plotId);
+            .FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException("Plot", plotId);
 
         var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
         var today = DateOnly.FromDateTime(nowUtc);

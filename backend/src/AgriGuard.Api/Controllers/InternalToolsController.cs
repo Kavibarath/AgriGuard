@@ -1,6 +1,5 @@
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
-using AgriGuard.Application.Prescriptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -67,10 +66,12 @@ public sealed class InternalToolsController(IAgentToolService tools) : Controlle
         tools.GetProductPricingAsync(productId, quantity, ct);
 
     /// <summary>
-    /// validate_prescription — the deterministic rules V1–V11. Always 200 with a verdict, even for a
-    /// malformed proposal (that is rule V1 failing), so the agent gets something it can act on.
+    /// validate_prescription — Component A's deterministic rules V1–V11, the same validator behind
+    /// POST /api/prescriptions/validate. A proposal the model got wrong still gets a 200 verdict (V1
+    /// failing), so the agent has something to act on. A proposal for a crop outside the run's own
+    /// case is refused with 422.
     /// </summary>
     [HttpPost("validate-prescription")]
-    public Task<PrescriptionVerdict> ValidatePrescription(PrescriptionProposalInput proposal, CancellationToken ct) =>
+    public Task<AgentVerdictTool> ValidatePrescription(AgentProposalInput proposal, CancellationToken ct) =>
         tools.ValidatePrescriptionAsync(proposal, ct);
 }

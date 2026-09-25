@@ -173,15 +173,66 @@ public sealed class InternalAgentApiTests(AgriGuardApiFactory factory)
     }
 
     [Fact]
-    public async Task A_malformed_proposal_gets_a_verdict_not_an_error()
+    public async Task A_proposal_the_model_got_wrong_gets_a_verdict_not_an_error()
     {
+        var (setup, _, _, runId) = await RunInFlightAsync();
+
+        // A product name where the id should be, and a date the model did not format.
         var response = await factory.AgentClient().PostAsJsonAsync("/internal/tools/validate-prescription",
-            new { runId = "nope", cropCycleId = Guid.NewGuid(), productId = Guid.NewGuid(), dosePerHectare = 2.0, totalQuantity = 1.6, sprayDate = "tomorrow" });
+            new { runId, cropCycleId = setup.Cycle.Id, productId = "Mancozeb 80 WP", dosePerHectare = 2.0, totalQuantity = 1.6, sprayDate = "tomorrow" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var verdict = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Rejected", verdict.GetProperty("outcome").GetString());
+        Assert.Equal("V1", verdict.GetProperty("results")[0].GetProperty("code").GetString());
         Assert.Equal("Failed", verdict.GetProperty("results")[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task The_verdict_carries_only_the_fields_the_agent_accepts()
+    {
+        var (setup, _, _, runId) = await RunInFlightAsync();
+        await factory.SeedDealerStockAsync(setup.DistrictId);
+
+        var verdict = await Validate(runId, setup.Cycle.Id, dose: 2.0m, total: 1.6m, Tomorrow);
+
+        // agent/app/contracts.py Verdict forbids unknown fields, so extra keys would fail every run.
+        Assert.Equal(["outcome", "summary", "results"], verdict.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["code", "name", "status", "severity", "message", "evidence"],
+            verdict.GetProperty("results")[0].EnumerateObject().Select(p => p.Name));
+    }
+
+    [Fact]
+    public async Task A_proposal_for_a_crop_outside_the_run_s_case_is_refused()
+    {
+        var (_, _, _, runId) = await RunInFlightAsync();
+        var otherFarm = await factory.SeedTomatoPlotAsync();
+
+        var response = await factory.AgentClient().PostAsJsonAsync("/internal/tools/validate-prescription", new
+        {
+            runId,
+            cropCycleId = otherFarm.Cycle.Id,
+            productId = await factory.ProductIdAsync(),
+            dosePerHectare = 2.0,
+            totalQuantity = 1.6,
+            sprayDate = Tomorrow
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("PROPOSAL_OUTSIDE_CASE", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task With_no_stock_anywhere_the_stock_rule_fails_rather_than_going_unchecked()
+    {
+        // No test ever stocks Metalaxyl (approved on tomato at 0.8–1.2/ha).
+        var (setup, _, _, runId) = await RunInFlightAsync();
+
+        var verdict = await Validate(runId, setup.Cycle.Id, dose: 1.0m, total: 0.8m, Tomorrow, product: "Metalaxyl 25 WP");
+
+        var v9 = verdict.GetProperty("results").EnumerateArray().Single(r => r.GetProperty("code").GetString() == "V9");
+        Assert.Equal("Failed", v9.GetProperty("status").GetString());
+        Assert.Equal("Revise", verdict.GetProperty("outcome").GetString());
     }
 
     // ── Callbacks ───────────────────────────────────────────────────────────
@@ -281,13 +332,13 @@ public sealed class InternalAgentApiTests(AgriGuardApiFactory factory)
     private static async Task Post(HttpClient agent, Guid runId, object body) =>
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/internal/agent-runs/{runId}/events", body)).StatusCode);
 
-    private async Task<JsonElement> Validate(Guid runId, Guid cycleId, decimal dose, decimal total, string sprayDate)
+    private async Task<JsonElement> Validate(Guid runId, Guid cycleId, decimal dose, decimal total, string sprayDate, string product = "Mancozeb 80 WP")
     {
         var response = await factory.AgentClient().PostAsJsonAsync("/internal/tools/validate-prescription", new
         {
             runId,
             cropCycleId = cycleId,
-            productId = await factory.ProductIdAsync(),
+            productId = await factory.ProductIdAsync(product),
             dosePerHectare = dose,
             totalQuantity = total,
             sprayDate,

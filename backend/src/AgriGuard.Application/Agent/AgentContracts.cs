@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using AgriGuard.Application.Prescriptions;
+using AgriGuard.Application.Validation;
 using AgriGuard.Domain.Cases;
+using AgriGuard.Domain.Validation;
 
 namespace AgriGuard.Application.Agent;
 
@@ -125,19 +126,21 @@ public sealed record PlotSafetyProfileTool(
     int DaysToHarvest,
     IReadOnlyList<ProductWindowTool> ProductWindows);
 
+/// <summary>One product's window, from Component A's safety-profile calculation.</summary>
 public sealed record ProductWindowTool(
     Guid ProductId,
     string ProductName,
     int PreHarvestIntervalDays,
     // Spraying after this date breaks the pre-harvest interval (rule V5).
     DateOnly LastSafeSprayDate,
-    int ApplicationsThisCycle,
+    int ApplicationsUsed,
     int MaxApplicationsPerCycle,
-    DateOnly? LastApplicationDate,
+    DateOnly? LastAppliedOn,
     // Earliest date the same active ingredient may be sprayed again (rule V7), if it was used before.
-    DateOnly? NextAllowedSprayDate,
-    // Neither PHI nor the per-cycle limit blocks a spray today (the hard, Reject-level rules).
-    bool CanSprayToday);
+    DateOnly? EarliestNextApplication,
+    // False when the pre-harvest interval, the per-cycle limit or the resistance interval blocks today.
+    bool CanSprayToday,
+    string? BlockedExplanation);
 
 public sealed record StockAvailabilityTool(
     Guid ProductId,
@@ -159,6 +162,27 @@ public sealed record ProductPricingTool(
     decimal? EstimatedCost);
 
 /// <summary>
+/// A proposal as the Validation agent sends it (agent/app/graph.py). The fields the model chose
+/// are loosely typed on purpose: a product id it made up or a date it mangled must reach Component
+/// A's validator and come back as a recorded V1 failure the agent can act on, not as a 400.
+/// </summary>
+public sealed record AgentProposalInput(
+    string? RunId,
+    string? CropCycleId,
+    string? ProductId,
+    decimal? DosePerHectare,
+    decimal? TotalQuantity,
+    string? SprayDate,
+    string? DealerId);
+
+/// <summary>
+/// Component A's verdict in exactly the shape the agent validates (agent/app/contracts.py Verdict,
+/// which forbids unknown fields): outcome, summary, and each rule's code, name, status, severity,
+/// message and evidence.
+/// </summary>
+public sealed record AgentVerdictTool(ValidationOutcome Outcome, string Summary, IReadOnlyList<RuleResultDto> Results);
+
+/// <summary>
 /// The agent's read-only view of the system (§9.3). Every method answers one allow-listed tool in
 /// agent/app/tools.py. Nothing here writes: reserving stock and issuing prescriptions happen only
 /// after a human approves, and are deliberately not tools.
@@ -172,5 +196,5 @@ public interface IAgentToolService
     Task<PlotSafetyProfileTool> GetPlotSafetyProfileAsync(Guid plotId, CancellationToken ct = default);
     Task<StockAvailabilityTool> CheckStockAvailabilityAsync(Guid productId, Guid? districtId, DateOnly? usableOn, CancellationToken ct = default);
     Task<ProductPricingTool> GetProductPricingAsync(Guid productId, decimal? quantity, CancellationToken ct = default);
-    Task<PrescriptionVerdict> ValidatePrescriptionAsync(PrescriptionProposalInput proposal, CancellationToken ct = default);
+    Task<AgentVerdictTool> ValidatePrescriptionAsync(AgentProposalInput proposal, CancellationToken ct = default);
 }

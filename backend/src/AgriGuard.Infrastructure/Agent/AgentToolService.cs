@@ -1,10 +1,9 @@
 using System.Globalization;
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Common.Exceptions;
-using AgriGuard.Application.Prescriptions;
 using AgriGuard.Domain.Registry;
 using AgriGuard.Infrastructure.Persistence;
-using AgriGuard.Infrastructure.Prescriptions;
+using AgriGuard.Infrastructure.Registry;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriGuard.Infrastructure.Agent;
@@ -16,7 +15,8 @@ namespace AgriGuard.Infrastructure.Agent;
 /// </summary>
 public sealed class AgentToolService(
     AgriGuardDbContext db,
-    PrescriptionSafetyChecker safetyChecker,
+    AgentPrescriptionGate prescriptionGate,
+    SafetyProfileService safetyProfiles,
     TimeProvider timeProvider) : IAgentToolService
 {
     private DateOnly Today => DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
@@ -167,72 +167,23 @@ public sealed class AgentToolService(
     }
 
     /// <summary>
-    /// Per product approved for the plot's current crop: the last date it can be sprayed and still
-    /// clear the pre-harvest interval, and how much of the per-cycle allowance its active
-    /// ingredient has used. The same facts V5–V7 check, offered up front so the Action agent can
-    /// propose something that passes.
+    /// Component A's safety profile (the same calculation behind GET /api/plots/{id}/safety-profile),
+    /// trimmed to what the Action agent reads: per product, the last PHI-safe spray date and whether
+    /// anything blocks a spray today. Offered up front so the agent proposes something that passes.
     /// </summary>
     public async Task<PlotSafetyProfileTool> GetPlotSafetyProfileAsync(Guid plotId, CancellationToken ct = default)
     {
-        if (!await db.Plots.AnyAsync(p => p.Id == plotId, ct))
-            throw new NotFoundException("Plot", plotId);
+        var profile = await safetyProfiles.ComputeAsync(plotId, ct);
 
-        var cycle = await db.CropCycles.AsNoTracking()
-            .Where(c => c.PlotId == plotId && c.Status == CropCycleStatus.Active)
-            .Select(c => new
-            {
-                c.Id,
-                c.CropId,
-                CropName = c.Crop.Name,
-                c.Plot.AreaHectares,
-                HarvestDate = c.PlannedHarvestDate ?? c.ExpectedHarvestDate
-            })
-            .FirstOrDefaultAsync(ct)
-            ?? throw new BusinessRuleException("NO_ACTIVE_CYCLE", "This plot has no active crop cycle.");
-
-        var approvals = await db.ProductCropApprovals.AsNoTracking()
-            .Where(a => a.CropId == cycle.CropId && a.IsActive && a.Product.IsActive)
-            .OrderBy(a => a.Product.Name)
-            .Select(a => new
-            {
-                a.ProductId,
-                ProductName = a.Product.Name,
-                a.Product.ActiveIngredientId,
-                a.PreHarvestIntervalDays,
-                a.MaxApplicationsPerCycle,
-                a.MinDaysBetweenApplications
-            })
-            .ToListAsync(ct);
-
-        var usage = (await db.ChemicalApplications.AsNoTracking()
-                .Where(a => a.CropCycleId == cycle.Id && a.Status != ApplicationStatus.Cancelled)
-                .Select(a => new { a.Product.ActiveIngredientId, a.ApplicationDate })
-                .ToListAsync(ct))
-            .GroupBy(a => a.ActiveIngredientId)
-            .ToDictionary(g => g.Key, g => (Count: g.Count(), Last: g.Max(a => a.ApplicationDate)));
-
-        var today = Today;
-        var windows = approvals.Select(a =>
-        {
-            var used = usage.GetValueOrDefault(a.ActiveIngredientId);
-            DateOnly? last = used.Count > 0 ? used.Last : null;
-            var lastSafe = cycle.HarvestDate.AddDays(-a.PreHarvestIntervalDays);
-
-            return new ProductWindowTool(
-                a.ProductId,
-                a.ProductName,
-                a.PreHarvestIntervalDays,
-                lastSafe,
-                used.Count,
-                a.MaxApplicationsPerCycle,
-                last,
-                last?.AddDays(a.MinDaysBetweenApplications),
-                CanSprayToday: today <= lastSafe && used.Count < a.MaxApplicationsPerCycle);
-        }).ToList();
+        if (profile is not { CropCycleId: { } cycleId, CropName: { } cropName, HarvestDate: { } harvestDate, DaysToHarvest: { } daysToHarvest })
+            throw new BusinessRuleException("NO_ACTIVE_CYCLE", "This plot has no active crop cycle.");
 
         return new PlotSafetyProfileTool(
-            plotId, cycle.Id, cycle.CropName, cycle.AreaHectares, cycle.HarvestDate,
-            cycle.HarvestDate.DayNumber - today.DayNumber, windows);
+            profile.PlotId, cycleId, cropName, profile.AreaHectares, harvestDate, daysToHarvest,
+            [.. profile.ProductWindows.Select(w => new ProductWindowTool(
+                w.ProductId, w.ProductName, w.PreHarvestIntervalDays, w.LastSafeSprayDate,
+                w.ApplicationsUsed, w.MaxApplicationsPerCycle, w.LastAppliedOn, w.EarliestNextApplication,
+                w.CanSprayToday, w.BlockedExplanation))]);
     }
 
     public async Task<StockAvailabilityTool> CheckStockAvailabilityAsync(Guid productId, Guid? districtId, DateOnly? usableOn, CancellationToken ct = default)
@@ -275,8 +226,8 @@ public sealed class AgentToolService(
         return new ProductPricingTool(p.Id, p.Name, p.Unit.ToString(), p.PackSize, p.UnitPrice, packs, packs * p.UnitPrice);
     }
 
-    public Task<PrescriptionVerdict> ValidatePrescriptionAsync(PrescriptionProposalInput proposal, CancellationToken ct = default) =>
-        safetyChecker.CheckAsync(proposal, ct);
+    public Task<AgentVerdictTool> ValidatePrescriptionAsync(AgentProposalInput proposal, CancellationToken ct = default) =>
+        prescriptionGate.CheckAsync(proposal, ct);
 
     private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
