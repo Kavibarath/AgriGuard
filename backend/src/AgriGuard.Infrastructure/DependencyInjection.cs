@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IFarmService, FarmService>();
         services.AddScoped<IPlotService, PlotService>();
         services.AddScoped<ICropCycleService, CropCycleService>();
+        services.AddScoped<ISafetyProfileService, SafetyProfileService>();
 
         return services;
     }
