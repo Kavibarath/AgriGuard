@@ -67,9 +67,15 @@ public class AgriGuardDbContext(
     /// <summary>Numbers case references (AG-2026-000142). A sequence, so concurrent submissions never collide.</summary>
     public const string CaseReferenceSequence = "case_reference_numbers";
 
+    /// <summary>Numbers prescriptions (RX-2026-000001) and dealer orders (ORD-2026-000001).</summary>
+    public const string PrescriptionSequence = "prescription_numbers";
+    public const string InputOrderSequence = "input_order_numbers";
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasSequence<long>(CaseReferenceSequence);
+        modelBuilder.HasSequence<long>(PrescriptionSequence);
+        modelBuilder.HasSequence<long>(InputOrderSequence);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgriGuardDbContext).Assembly);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

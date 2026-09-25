@@ -149,14 +149,8 @@ public sealed class AgentCallbackService(
         try
         {
             // Built from the run's own case, not from anything the agent says about where it applies.
-            verdict = await prescriptionGate.CheckAsync(new AgentProposalInput(
-                run.Id.ToString(),
-                run.Case.CropCycleId.ToString(),
-                ReadString(body, "product_id"),
-                ReadDecimal(body, "dose_per_hectare"),
-                ReadDecimal(body, "total_quantity"),
-                ReadString(body, "spray_date"),
-                ReadString(body, "dealer_id")), ct);
+            verdict = await prescriptionGate.CheckAsync(
+                AgentPrescriptionGate.FromStoredProposal(body, run.Id, run.Case.CropCycleId), ct);
         }
         catch (AppException ex)
         {
@@ -271,14 +265,6 @@ public sealed class AgentCallbackService(
         e.SequenceNo is null && e.Goal is null
             ? null
             : AgentPayloads.ToStorable(new { sequenceNo = e.SequenceNo, goal = Truncate(e.Goal, 500) });
-
-    private static string? ReadString(JsonElement body, string name) =>
-        body.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-
-    private static decimal? ReadDecimal(JsonElement body, string name) =>
-        body.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)
-            ? number
-            : null;
 
     private static string? Truncate(string? value, int max) => AgentRunLifecycle.Truncate(value, max);
 

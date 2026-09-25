@@ -1,4 +1,5 @@
 using AgriGuard.Application.Cases;
+using AgriGuard.Domain.Cases;
 using AgriGuard.Domain.Reference;
 using FluentValidation;
 
@@ -35,6 +36,29 @@ public sealed class CreateCaseRequestValidator : AbstractValidator<CreateCaseReq
         RuleFor(x => x.Longitude).InclusiveBetween(-180, 180).WithMessage("Longitude must be between -180 and 180.");
 
         RuleFor(x => x.Severity).IsInEnum();
+    }
+}
+
+public sealed class DecideRequestValidator : AbstractValidator<DecideRequest>
+{
+    public DecideRequestValidator()
+    {
+        RuleFor(x => x.Decision).IsInEnum().WithMessage("Decision must be Approve, Reject or Revise.");
+
+        // A rejection is audited; a revision's reason is what the agent is told to fix. Neither is
+        // useful as "no" or "fix it".
+        RuleFor(x => x.Reason)
+            .NotEmpty().WithMessage("Give a reason when rejecting or requesting a revision.")
+            .MinimumLength(10).WithMessage("Say what is wrong in a sentence, so the reason is useful later.")
+            .When(x => x.Decision is ApprovalDecisionType.Reject or ApprovalDecisionType.Revise);
+
+        RuleFor(x => x.Reason).MaximumLength(1000);
+
+        // The agent accepts a reviewer note of at most this length.
+        RuleFor(x => x.Reason)
+            .MaximumLength(ApprovalLimits.MaxReviewerNoteLength)
+            .When(x => x.Decision == ApprovalDecisionType.Revise)
+            .WithMessage($"Keep revision guidance under {ApprovalLimits.MaxReviewerNoteLength} characters; it is passed to the agent.");
     }
 }
 
