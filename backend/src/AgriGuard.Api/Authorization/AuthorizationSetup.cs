@@ -1,3 +1,4 @@
+using AgriGuard.Api.Authentication;
 using AgriGuard.Application.Auth;
 using AgriGuard.Domain.Identity;
 using Microsoft.AspNetCore.Authorization;
@@ -34,6 +35,13 @@ public static class AuthorizationSetup
             // Everyone with a legitimate interest in farm data; the dealer is not one of them.
             options.AddPolicy(AuthPolicies.OwnsFarm,
                 RoleIn(UserRole.Farmer, UserRole.FieldAgronomist, UserRole.CoopAdministrator));
+
+            // The /internal/* surface. Evaluated against the agent-key scheme only, so a user's JWT
+            // is not even looked at here — and the claim it requires is never issued in a JWT.
+            options.AddPolicy(AuthPolicies.AgentService, policy => policy
+                .AddAuthenticationSchemes(AgentKeyDefaults.Scheme)
+                .RequireAuthenticatedUser()
+                .RequireClaim(AgriGuardClaims.AgentService, "true"));
         });
 
         return services;

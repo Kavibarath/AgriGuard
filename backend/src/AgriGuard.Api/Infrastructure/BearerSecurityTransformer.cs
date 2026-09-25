@@ -1,3 +1,5 @@
+using AgriGuard.Api.Authentication;
+using AgriGuard.Application.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
@@ -6,7 +8,8 @@ namespace AgriGuard.Api.Infrastructure;
 
 /// <summary>
 /// Adds the JWT "Authorize" button to Swagger UI and marks only endpoints that actually require
-/// authorization with a padlock, so anonymous endpoints like login don't look protected.
+/// authorization with a padlock, so anonymous endpoints like login don't look protected. The
+/// /internal/* endpoints are marked with the agent key instead, since a JWT does not open them.
 /// </summary>
 public sealed class BearerSecurityTransformer : IOpenApiDocumentTransformer, IOpenApiOperationTransformer
 {
@@ -23,20 +26,29 @@ public sealed class BearerSecurityTransformer : IOpenApiDocumentTransformer, IOp
             BearerFormat = "JWT",
             Description = "Paste the access token returned by POST /api/auth/login (without the 'Bearer ' prefix)."
         };
+        document.Components.SecuritySchemes[AgentKeyDefaults.Scheme] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.ApiKey,
+            In = ParameterLocation.Header,
+            Name = AgentKeyDefaults.HeaderName,
+            Description = "The agent service's shared key (AgentService:ApiKey). Opens /internal/* only."
+        };
         return Task.CompletedTask;
     }
 
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken ct)
     {
         var metadata = context.Description.ActionDescriptor.EndpointMetadata;
-        var requiresAuth = metadata.OfType<IAuthorizeData>().Any() && !metadata.OfType<IAllowAnonymous>().Any();
-        if (!requiresAuth)
+        var authorize = metadata.OfType<IAuthorizeData>().ToList();
+        if (authorize.Count == 0 || metadata.OfType<IAllowAnonymous>().Any())
             return Task.CompletedTask;
+
+        var scheme = authorize.Any(a => a.Policy == AuthPolicies.AgentService) ? AgentKeyDefaults.Scheme : SchemeId;
 
         operation.Security ??= [];
         operation.Security.Add(new OpenApiSecurityRequirement
         {
-            [new OpenApiSecuritySchemeReference(SchemeId, context.Document)] = []
+            [new OpenApiSecuritySchemeReference(scheme, context.Document)] = []
         });
         return Task.CompletedTask;
     }

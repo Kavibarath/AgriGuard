@@ -98,8 +98,10 @@ try
     if (!app.Environment.IsDevelopment())
         app.UseHttpsRedirection();
     app.UseCors();
-    app.UseRateLimiter();
+    // Authentication first, so the limiter can partition by the signed-in user (RateLimitPolicies.PerClient).
+    // Before it, every caller looked anonymous and a whole co-op behind one NAT shared one bucket.
     app.UseAuthentication();
+    app.UseRateLimiter();
     app.UseAuthorization();
 
     // Probes must stay reachable without a token — the fallback policy would otherwise 401 them.
