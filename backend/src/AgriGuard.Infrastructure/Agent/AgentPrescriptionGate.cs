@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Validation;
@@ -56,6 +57,30 @@ public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionVa
         return new AgentVerdictTool(verdict.Outcome, verdict.Summary, verdict.Results);
     }
 
+    /// <summary>
+    /// A stored proposal (agent/app/contracts.py PrescriptionProposal, snake_case) as gate input,
+    /// for the run's own crop cycle. The crop cycle comes from the case, never from the proposal.
+    /// </summary>
+    public static AgentProposalInput FromStoredProposal(JsonElement proposal, Guid runId, Guid cropCycleId) => new(
+        runId.ToString(),
+        cropCycleId.ToString(),
+        ReadString(proposal, "product_id"),
+        ReadDecimal(proposal, "dose_per_hectare"),
+        ReadDecimal(proposal, "total_quantity"),
+        ReadString(proposal, "spray_date"),
+        ReadString(proposal, "dealer_id"));
+
+    private static string? ReadString(JsonElement body, string name) =>
+        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static decimal? ReadDecimal(JsonElement body, string name) =>
+        body.ValueKind == JsonValueKind.Object && body.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)
+            ? number
+            : null;
+
     /// <summary>Returns the farm's district, which the stock search is limited to.</summary>
     private async Task<Guid> EnsureRunOwnsCycleAsync(Guid runId, Guid cropCycleId, CancellationToken ct)
     {
@@ -65,7 +90,8 @@ public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionVa
             .FirstOrDefaultAsync(ct)
             ?? throw new NotFoundException("Agent run", runId);
 
-        if (!CaseStatusRules.AgentActiveRunStatuses.Contains(run.Status))
+        // Awaiting approval still counts: the approval transaction re-checks the proposal then.
+        if (CaseStatusRules.TerminalRunStatuses.Contains(run.Status))
             throw new BusinessRuleException("RUN_NOT_ACTIVE", $"Run {runId} is {run.Status} and can no longer propose.");
 
         if (run.CropCycleId != cropCycleId)

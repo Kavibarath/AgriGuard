@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgriGuard.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgriGuardDbContext))]
-    partial class AgriGuardDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925140640_PrescriptionAndOrderSequences")]
+    partial class PrescriptionAndOrderSequences
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
