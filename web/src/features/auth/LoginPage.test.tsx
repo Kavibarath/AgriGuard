@@ -37,8 +37,11 @@ describe('LoginPage', () => {
     await user.type(screen.getByLabelText('Password'), PASSWORD)
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/dashboard'))
-    expect(screen.getByText('Dr. Nimali Fernando')).toBeInTheDocument()
+    // Wait on the rendered page, not on router.state: the router's location updates before
+    // React has rendered the new route, so querying the DOM straight after the router assertion
+    // is a race — one this test lost on CI's slower runner.
+    expect(await screen.findByText('Dr. Nimali Fernando')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/dashboard')
     expect(useAuthStore.getState().user?.role).toBe('FieldAgronomist')
     expect(localStorage.getItem('agriguard.auth')).toContain('refresh-FieldAgronomist')
   })
