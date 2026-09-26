@@ -1,5 +1,7 @@
 import { createBrowserRouter, createMemoryRouter, Navigate, type RouteObject } from 'react-router'
 import { MessagePage } from '@/components/MessagePage'
+import { AgentRunPage } from '@/features/agent-runs/AgentRunPage'
+import { AgentRunsPage } from '@/features/agent-runs/AgentRunsPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
@@ -20,6 +22,10 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/farms', element: <FarmsPage /> },
           { path: '/farms/:farmId', element: <FarmDetailPage /> },
+          // Component B. Viewing is open to the same roles (the API scopes the rows); deciding
+          // is Field Agronomist only, enforced by the API and explained in the decision panel.
+          { path: '/agent-runs', element: <AgentRunsPage /> },
+          { path: '/agent-runs/:runId', element: <AgentRunPage /> },
         ],
       },
       // Feature areas are added by their owners; until then the dashboard links land here.

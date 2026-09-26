@@ -85,7 +85,11 @@ public sealed record AgentRunDto(
     DateTime CreatedAt,
     DateTime? StartedAt,
     DateTime? CompletedAt,
-    IReadOnlyList<AgentRunStepDto> Steps);
+    IReadOnlyList<AgentRunStepDto> Steps,
+    // The stored proposal carries only the product's id; its name is resolved for display.
+    string? ProposedProductName,
+    // Set once the run was approved.
+    IssuedPrescriptionDto? Prescription);
 
 public sealed record AgentRunStepDto(
     int SequenceNo,
