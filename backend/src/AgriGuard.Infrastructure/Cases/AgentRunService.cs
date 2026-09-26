@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Cases;
 using AgriGuard.Application.Common.Exceptions;
@@ -113,14 +114,21 @@ public sealed class AgentRunService(
 
         CaseScope.EnsureVisible(row, await db.AgentRuns.AnyAsync(r => r.Id == runId, ct), "Agent run", runId);
 
+        var proposal = AgentPayloads.ToElement(row!.ProposalJson);
+        string? productName = null;
+        if (proposal is { ValueKind: JsonValueKind.Object } p
+            && p.TryGetProperty("product_id", out var id) && id.ValueKind == JsonValueKind.String
+            && Guid.TryParse(id.GetString(), out var productId))
+            productName = await db.Products.Where(x => x.Id == productId).Select(x => x.Name).FirstOrDefaultAsync(ct);
+
         return new AgentRunDto(
-            row!.Id,
+            row.Id,
             row.CaseId,
             row.ReferenceNo,
             row.Objective,
             row.Status,
             AgentPayloads.ToElement(row.PlanJson),
-            AgentPayloads.ToElement(row.ProposalJson),
+            proposal,
             AgentPayloads.ToElement(row.VerdictJson),
             AgentPayloads.ToElement(row.FinalOutcomeJson),
             row.FailureReason,
@@ -130,7 +138,9 @@ public sealed class AgentRunService(
             row.CompletedAt,
             row.Steps.Select(s => new AgentRunStepDto(
                 s.SequenceNo, s.AgentRole, s.Goal, s.Status, AgentPayloads.ToElement(s.OutputJson),
-                s.ErrorMessage, s.RetryCount, s.StartedAt, s.CompletedAt, s.DurationMs)).ToList());
+                s.ErrorMessage, s.RetryCount, s.StartedAt, s.CompletedAt, s.DurationMs)).ToList(),
+            productName,
+            row.Status == AgentRunStatus.Completed ? await IssuedPrescriptions.ForRunAsync(db, row.Id, ct) : null);
     }
 
     public async Task<PagedResult<AgentRunEventDto>> ListEventsAsync(Guid runId, AgentRunEventQuery query, CancellationToken ct = default)

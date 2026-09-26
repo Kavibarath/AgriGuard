@@ -410,27 +410,9 @@ public sealed class ApprovalService(
             })
             .FirstAsync(ct);
 
-        IssuedPrescriptionDto? prescription = null;
-        if (d.Decision == ApprovalDecisionType.Approve)
-        {
-            prescription = await db.InputOrders.AsNoTracking()
-                .Where(o => o.Prescription!.AgentRunId == d.AgentRunId)
-                .Select(o => new IssuedPrescriptionDto(
-                    o.Prescription!.Id,
-                    o.Prescription.PrescriptionNo,
-                    o.Prescription.Product.Name,
-                    o.Prescription.DosePerHectare,
-                    o.Prescription.TotalQuantity,
-                    o.Prescription.SprayDate,
-                    o.Prescription.EarliestSafeHarvestDate,
-                    o.Prescription.Instructions,
-                    o.Id,
-                    o.OrderNo,
-                    o.Dealer.ShopName,
-                    o.Lines.Sum(l => l.Packs),
-                    o.TotalAmount))
-                .FirstOrDefaultAsync(ct);
-        }
+        var prescription = d.Decision == ApprovalDecisionType.Approve
+            ? await IssuedPrescriptions.ForRunAsync(db, d.AgentRunId, ct)
+            : null;
 
         return new DecisionResultDto(d.Id, d.AgentRunId, d.CaseId, d.Decision, d.Reason, d.DecidedAt,
             d.RunStatus, d.CaseStatus, prescription, replayed);

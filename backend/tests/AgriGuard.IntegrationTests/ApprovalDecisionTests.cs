@@ -61,6 +61,20 @@ public sealed class ApprovalDecisionTests(AgriGuardApiFactory factory)
     }
 
     [Fact]
+    public async Task The_run_shows_the_product_by_name_and_after_approval_the_issued_prescription()
+    {
+        var run = await factory.RunAwaitingApprovalAsync();
+
+        var before = await run.Agronomist.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{run.RunId}");
+        await run.Agronomist.DecideAsync(run.RunId, "Approve", key: Key());
+        var after = await run.Agronomist.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{run.RunId}");
+
+        Assert.Equal("Mancozeb 80 WP", before.GetProperty("proposedProductName").GetString());
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("prescription").ValueKind);
+        Assert.Matches(@"^RX-\d{4}-\d{6}$", after.GetProperty("prescription").GetProperty("prescriptionNo").GetString());
+    }
+
+    [Fact]
     public async Task Replaying_the_same_key_returns_the_original_result_and_draws_nothing_more()
     {
         var run = await factory.RunAwaitingApprovalAsync();
