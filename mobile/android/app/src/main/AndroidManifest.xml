@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Every screen talks to the API. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Where the phone was when a crop problem is reported. Asked for only on the report screen;
+         refusing it is fine — the case then uses the plot's registered location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="AgriGuard"
         android:name="${applicationName}"

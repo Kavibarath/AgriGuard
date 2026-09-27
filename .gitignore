@@ -21,6 +21,9 @@ mono_crash.*
 
 # Build results
 [Dd]ebug/
+# ...but not Android's debug source set: it holds the manifest that lets debug builds reach the
+# local API over http://10.0.2.2:5000. Ignoring it broke emulator builds on any other clone.
+!mobile/android/app/src/debug/
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/

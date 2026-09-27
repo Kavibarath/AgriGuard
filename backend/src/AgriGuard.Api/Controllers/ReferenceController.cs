@@ -1,3 +1,5 @@
+using AgriGuard.Application.Cases;
+using AgriGuard.Domain.Reference;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,4 +41,14 @@ public sealed class ReferenceController(AgriGuardDbContext db) : ControllerBase
             .OrderBy(c => c.Name)
             .Select(c => new CropDto(c.Id, c.Code, c.Name, c.ScientificName, c.MaturityDays))
             .ToListAsync(ct);
+
+    /// <summary>
+    /// The closed symptom checklist the farmer ticks when reporting a case. The same catalogue
+    /// the API validates case submissions against, so the app can only offer codes it accepts.
+    /// </summary>
+    [HttpGet("symptoms")]
+    [ResponseCache(Duration = 3600, Location = ResponseCacheLocation.Client)]
+    [ProducesResponseType<IReadOnlyList<SymptomDto>>(StatusCodes.Status200OK)]
+    public IReadOnlyList<SymptomDto> Symptoms() =>
+        [.. SymptomCatalogue.All.Select(s => new SymptomDto(s.Key, s.Value)).OrderBy(s => s.Label, StringComparer.Ordinal)];
 }
