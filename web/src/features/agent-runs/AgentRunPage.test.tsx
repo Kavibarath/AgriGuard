@@ -61,6 +61,14 @@ describe('AgentRunPage', () => {
     expect(screen.getByText(/instruction-like text in the note/i)).toBeInTheDocument()
   })
 
+  it('shows on the timeline that the proposal’s stock is held until the decision', async () => {
+    signIn()
+    renderApp(`/agent-runs/${RUN_ID}`)
+
+    expect(await screen.findByText('Stock held')).toBeInTheDocument()
+    expect(screen.getByText('2 pack(s) off sale until 2026-09-26 11:03 UTC · from MZ-2601')).toBeInTheDocument()
+  })
+
   it('approves with an Idempotency-Key after a confirmation, then shows the prescription', async () => {
     signIn()
     const sent = captureDecisions()

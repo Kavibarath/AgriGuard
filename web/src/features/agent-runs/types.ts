@@ -226,6 +226,8 @@ export type AgentEventType =
   | 'ApprovalDecided'
   | 'RunFailed'
   | 'RunCompleted'
+  | 'StockHeld'
+  | 'StockReleased'
 
 export interface AgentRunEvent {
   id: string

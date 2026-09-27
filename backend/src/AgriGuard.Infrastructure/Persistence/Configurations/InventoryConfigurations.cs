@@ -130,6 +130,7 @@ internal sealed class StockReservationConfiguration : IEntityTypeConfiguration<S
     public void Configure(EntityTypeBuilder<StockReservation> b)
     {
         b.Property(x => x.TotalQuantity).HasPrecision(12, 4);
+        b.Property(x => x.Note).HasMaxLength(300);
         b.Property(x => x.Version).IsRowVersion();
 
         b.HasOne(x => x.AgentRun).WithMany().HasForeignKey(x => x.AgentRunId);

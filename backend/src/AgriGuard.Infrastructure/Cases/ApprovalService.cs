@@ -10,10 +10,10 @@ using AgriGuard.Domain.Inventory;
 using AgriGuard.Domain.Registry;
 using AgriGuard.Domain.Validation;
 using AgriGuard.Infrastructure.Agent;
+using AgriGuard.Infrastructure.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace AgriGuard.Infrastructure.Cases;
 
@@ -23,14 +23,16 @@ namespace AgriGuard.Infrastructure.Cases;
 ///
 /// **Approve** runs as ONE serializable transaction. Either all of these happen, or none do:
 ///   1. the proposal is re-validated against the rules as they stand now (V1–V11);
-///   2. the dealer's batch rows are locked (SELECT … FOR UPDATE) and drawn first-expiry-first-out;
-///   3. a committed StockReservation records exactly which batches were drawn;
+///   2. the stock Held for this proposal since it reached PendingApproval is committed — or, if that
+///      hold expired, the dealer's batch rows are locked (SELECT … FOR UPDATE) and drawn
+///      first-expiry-first-out (both through StockLedger);
+///   3. a committed StockReservation records exactly which batches the packs left;
 ///   4. the Prescription is issued, with the earliest safe harvest date;
 ///   5. the InputOrder is confirmed for the dealer;
 ///   6. a ChemicalApplication is scheduled, so the next proposal's V6/V7 count this spray;
 ///   7. the case becomes Prescribed, the run Completed, and the decision and events are appended.
 ///
-/// **Reject** ends the run. **Revise** sends the same run back to the agent with the agronomist's
+/// **Reject** ends the run and releases the held stock. **Revise** releases it too and sends the same run back to the agent with the agronomist's
 /// reason as guidance, at most <see cref="MaxHumanRevisions"/> times.
 ///
 /// Double submission is handled three ways, from cheapest to last resort: the Idempotency-Key
@@ -41,6 +43,8 @@ public sealed class ApprovalService(
     AgriGuardDbContext db,
     ICurrentUserAccessor currentUser,
     AgentPrescriptionGate prescriptionGate,
+    StockLedger ledger,
+    ProposalStockHolds stockHolds,
     IAgentDispatcher dispatcher,
     TimeProvider timeProvider,
     ILogger<ApprovalService> logger) : IApprovalService
@@ -145,6 +149,7 @@ public sealed class ApprovalService(
                 break;
 
             case ApprovalDecisionType.Reject:
+                await stockHolds.ReleaseAsync(run.Id, "the proposal was rejected", now, ct);
                 run.Status = AgentRunStatus.Rejected;
                 run.CompletedAt = now;
                 run.FailureReason = AgentRunLifecycle.Truncate($"Rejected by the agronomist: {reason}", 1000);
@@ -159,6 +164,8 @@ public sealed class ApprovalService(
                     throw new BusinessRuleException("REVISION_LIMIT_REACHED",
                         $"This run has already been sent back {revisionsSoFar} times. Reject it and prescribe manually.");
 
+                // The revised proposal may need other stock; it is held again when it arrives.
+                await stockHolds.ReleaseAsync(run.Id, "a revision was requested", now, ct);
                 run.Status = AgentRunStatus.RevisionRequested;
                 // The run's clock restarts: the timeout sweeper measures from here.
                 run.StartedAt = now;
@@ -229,44 +236,12 @@ public sealed class ApprovalService(
             .Select(a => new { a.PreHarvestIntervalDays, a.ReEntryIntervalHours })
             .FirstAsync(ct);
 
-        // 2. Lock and draw the stock. The farmer buys whole packs, so that is what leaves the shelf.
+        // 2–3. The stock leaves the shelf. The farmer buys whole packs, so whole packs are what move.
         var packs = StockAllocation.PacksFor(total, product.PackSize);
         var drawn = packs * product.PackSize;
-        var batches = await LockBatchesAsync(productId, namedDealer, run.Case.DistrictId, sprayDate, ct);
-
-        // The same dealer V9 judged: the named one, or the best-stocked in the district.
-        var source = batches
-            .GroupBy(b => b.DealerId)
-            .Where(g => namedDealer is null || g.Key == namedDealer)
-            .OrderByDescending(g => g.Sum(b => b.QuantityOnHand - b.QuantityReserved))
-            .FirstOrDefault();
-
-        if (source is null
-            || StockAllocation.PlanFefo(
-                source.Select(b => new BatchStock(b.Id, b.BatchNo, b.ExpiryDate, b.QuantityOnHand - b.QuantityReserved)),
-                drawn) is not { } plan)
-            throw new BusinessRuleException("INSUFFICIENT_STOCK",
+        var (dealerId, packPrice) = await TakeStockAsync(run.Id, productId, drawn, namedDealer, run.Case.DistrictId, sprayDate, now, ct)
+            ?? throw new BusinessRuleException("INSUFFICIENT_STOCK",
                 $"{packs} pack(s) of {product.Name} ({Num(drawn)} {product.Unit}) are no longer in stock at one dealer. Request a revision instead.");
-
-        var byId = source.ToDictionary(b => b.Id);
-        foreach (var draw in plan)
-            byId[draw.BatchId].QuantityOnHand -= draw.Quantity;
-        var packPrice = plan.Max(d => byId[d.BatchId].UnitPrice);
-
-        // 3. The reservation, created already committed: it records which batches were drawn.
-        var reservation = new StockReservation
-        {
-            AgentRunId = run.Id,
-            DealerId = source.Key,
-            ProductId = productId,
-            TotalQuantity = drawn,
-            Status = ReservationStatus.Committed,
-            ExpiresAt = now,
-            ResolvedAt = now
-        };
-        db.StockReservations.Add(reservation);
-        foreach (var draw in plan)
-            db.StockReservationLines.Add(new StockReservationLine { Reservation = reservation, BatchId = draw.BatchId, Quantity = draw.Quantity });
 
         // 4. The prescription. Instructions are written here from the rules table, never taken from
         //    the model's text: this is what the farmer acts on.
@@ -300,7 +275,7 @@ public sealed class ApprovalService(
         {
             OrderNo = await NextNumberAsync(AgriGuardDbContext.InputOrderSequence, "ORD", ct),
             FarmerId = run.Case.FarmerId,
-            DealerId = source.Key,
+            DealerId = dealerId,
             Prescription = prescription,
             Status = OrderStatus.Confirmed,
             TotalAmount = packs * packPrice,
@@ -333,25 +308,38 @@ public sealed class ApprovalService(
     }
 
     /// <summary>
-    /// Locks the candidate batch rows until the transaction ends, so no other approval can draw the
-    /// same stock in between. Raw SQL because LINQ has no FOR UPDATE; xmin is selected because EF
-    /// maps it as the row version and needs it to track the rows.
+    /// Takes the approved packs off the shelf and records which batches they came from, as a
+    /// Committed StockReservation. Returns the dealer and the pack price, or null if no single
+    /// dealer can supply them any more.
+    ///
+    /// Normally the stock was Held when the proposal reached PendingApproval, and that hold is
+    /// committed: the very batches set aside for this farmer are the ones that leave. If there is no
+    /// live hold (it expired after 24 hours, or the run predates holds), the stock is locked and drawn
+    /// afresh, first-expiry-first-out, from the same dealer V9 judged.
     /// </summary>
-    private Task<List<InventoryBatch>> LockBatchesAsync(Guid productId, Guid? dealerId, Guid districtId, DateOnly sprayDate, CancellationToken ct) =>
-        dealerId is { } id
-            ? db.InventoryBatches.FromSql($"""
-                SELECT b.*, b.xmin FROM inventory_batches b
-                WHERE b.product_id = {productId} AND b.dealer_id = {id}
-                  AND b.expiry_date > {sprayDate} AND b.quantity_on_hand - b.quantity_reserved > 0
-                FOR UPDATE OF b
-                """).ToListAsync(ct)
-            : db.InventoryBatches.FromSql($"""
-                SELECT b.*, b.xmin FROM inventory_batches b
-                JOIN dealers d ON d.id = b.dealer_id
-                WHERE b.product_id = {productId} AND d.district_id = {districtId}
-                  AND b.expiry_date > {sprayDate} AND b.quantity_on_hand - b.quantity_reserved > 0
-                FOR UPDATE OF b
-                """).ToListAsync(ct);
+    private async Task<(Guid DealerId, decimal PackPrice)?> TakeStockAsync(
+        Guid runId, Guid productId, decimal quantity, Guid? namedDealer, Guid districtId, DateOnly sprayDate, DateTime now, CancellationToken ct)
+    {
+        if (await stockHolds.LockHeldAsync(runId, ct) is { } held)
+        {
+            // The proposal cannot change while it awaits approval, so the hold matches it; this is a
+            // backstop in case it ever does not.
+            if (held.ProductId == productId && held.TotalQuantity == quantity && (namedDealer is null || held.DealerId == namedDealer))
+            {
+                var batches = await ledger.CommitAsync(held, now, ct);
+                return (held.DealerId, held.Lines.Max(l => batches[l.BatchId].UnitPrice));
+            }
+
+            await stockHolds.ReleaseAsync(runId, "did not match the approved proposal", now, ct);
+            await db.SaveChangesAsync(ct);
+        }
+
+        if (await ledger.PickAsync(productId, quantity, namedDealer, districtId, sprayDate, ct) is not { } pick)
+            return null;
+
+        ledger.Draw(pick, runId, now);
+        return (pick.DealerId, pick.HighestUnitPrice);
+    }
 
     /// <summary>Revise, after the decision is committed: the same run goes back to the agent.</summary>
     private async Task DispatchRevisionAsync(Guid runId, string reason, CancellationToken ct)
@@ -438,20 +426,10 @@ public sealed class ApprovalService(
         return $"{prefix}-{UtcNow.Year}-{next:D6}";
     }
 
-    /// <summary>Lost a race: a serialization failure (40001) or a stale row version.</summary>
-    private static bool IsRaceLost(Exception ex) =>
-        ex is DbUpdateConcurrencyException || FindPostgres(ex)?.SqlState == PostgresErrorCodes.SerializationFailure;
+    /// <summary>Lost a race: a serialization failure, a deadlock or a stale row version.</summary>
+    private static bool IsRaceLost(Exception ex) => PostgresErrors.IsRaceLost(ex);
 
-    private static bool IsUniqueViolation(Exception ex, string column) =>
-        FindPostgres(ex) is { SqlState: PostgresErrorCodes.UniqueViolation } pg
-        && (pg.ConstraintName?.Contains(column, StringComparison.Ordinal) ?? false);
-
-    private static PostgresException? FindPostgres(Exception? ex)
-    {
-        for (; ex is not null; ex = ex.InnerException)
-            if (ex is PostgresException pg) return pg;
-        return null;
-    }
+    private static bool IsUniqueViolation(Exception ex, string column) => PostgresErrors.IsUniqueViolation(ex, column);
 
     private static string Num(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 }

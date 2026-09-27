@@ -150,6 +150,7 @@ export const events: AgentRunEvent[] = [
   { id: 'e3', eventType: 'ToolCalled', agentRole: 'Diagnosis', toolName: 'get_crop_history', payload: { attempt: 1 }, durationMs: 57, occurredAt: '2026-09-25T11:03:31.312Z', correlationId: 'agent-run-1' },
   { id: 'e4', eventType: 'ToolFailed', agentRole: 'Diagnosis', toolName: 'get_regional_outbreak_signal', payload: { attempt: 1, error: 'timeout' }, durationMs: 20000, occurredAt: '2026-09-25T11:03:51.374Z', correlationId: 'agent-run-1' },
   { id: 'e5', eventType: 'ValidationResult', agentRole: 'Validation', toolName: null, payload: { summary: 'All 10 checked rules passed.' }, durationMs: null, occurredAt: '2026-09-25T11:03:56.644Z', correlationId: 'agent-run-1' },
+  { id: 'e6', eventType: 'StockHeld', agentRole: null, toolName: null, payload: { packs: 2, quantity: 2, expiresAt: '2026-09-26T11:03:57.100Z', batches: ['MZ-2601'] }, durationMs: null, occurredAt: '2026-09-25T11:03:57.100Z', correlationId: null },
 ]
 
 export function makeDecisionResult(overrides: Partial<DecisionResult> = {}): DecisionResult {

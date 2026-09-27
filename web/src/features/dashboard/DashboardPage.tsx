@@ -17,7 +17,8 @@ interface NavCard {
 const cards: NavCard[] = [
   { policy: 'CanApprovePrescriptions', title: 'Agent runs', description: 'Review proposals, approve or request revision.', to: '/agent-runs' },
   { policy: 'OwnsFarm', title: 'Farms & plots', description: 'Registry, crop cycles and safety profiles.', to: '/farms' },
-  { policy: 'ManagesInventory', title: 'Inventory', description: 'Stock, batches, expiry and orders.', to: '/inventory' },
+  { policy: 'ManagesInventory', title: 'Inventory', description: 'Stock, batches, expiry warnings and holds.', to: '/inventory' },
+  { policy: 'ManagesInventory', title: 'Orders', description: 'Pack approved prescriptions and hand them over.', to: '/orders' },
   { policy: 'AdministersRules', title: 'Regulatory rules', description: 'Product approvals, PHI and dose limits.', to: '/rules' },
 ]
 
@@ -49,7 +50,7 @@ export function DashboardPage() {
         </h2>
         <ul className="grid gap-4 sm:grid-cols-2">
           {visible.map((card) => (
-            <li key={card.policy}>
+            <li key={card.to}>
               <Link
                 to={card.to}
                 className="block h-full rounded-lg border border-stone-200 bg-white p-4 shadow-sm transition hover:border-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"

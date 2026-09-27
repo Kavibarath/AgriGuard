@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import { queryString } from '@/lib/query-string'
 import type { Crop, CropCycle, District, Farm, PagedResult, Plot } from './types'
 
 export interface FarmQuery {
@@ -19,17 +20,6 @@ export interface PlotQuery {
   cropId?: string
   status?: string
   search?: string
-}
-
-/** Drops empty values so the URL carries only what was actually chosen. */
-function queryString(query: object): string {
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === null || value === '') continue
-    params.set(key, String(value))
-  }
-  const serialised = params.toString()
-  return serialised ? `?${serialised}` : ''
 }
 
 export const listFarms = (query: FarmQuery) => api<PagedResult<Farm>>(`/api/farms${queryString(query)}`)

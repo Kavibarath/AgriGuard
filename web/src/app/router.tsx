@@ -5,8 +5,11 @@ import { AgentRunsPage } from '@/features/agent-runs/AgentRunsPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { InventoryPage } from '@/features/inventory/InventoryPage'
+import { OrdersPage } from '@/features/inventory/OrdersPage'
 import { FarmDetailPage } from '@/features/registry/FarmDetailPage'
 import { FarmsPage } from '@/features/registry/FarmsPage'
+import { RulesPage } from '@/features/rules/RulesPage'
 
 export const routes: RouteObject[] = [
   { path: '/', element: <Navigate to="/dashboard" replace /> },
@@ -27,6 +30,19 @@ export const routes: RouteObject[] = [
           { path: '/agent-runs', element: <AgentRunsPage /> },
           { path: '/agent-runs/:runId', element: <AgentRunPage /> },
         ],
+      },
+      // Component C. A dealer's own shelf and orders; the API limits every row to their shop.
+      {
+        element: <ProtectedRoute policy="ManagesInventory" />,
+        children: [
+          { path: '/inventory', element: <InventoryPage /> },
+          { path: '/orders', element: <OrdersPage /> },
+        ],
+      },
+      // The regulatory rules table: Co-op Administrator only.
+      {
+        element: <ProtectedRoute policy="AdministersRules" />,
+        children: [{ path: '/rules', element: <RulesPage /> }],
       },
       // Feature areas are added by their owners; until then the dashboard links land here.
       {

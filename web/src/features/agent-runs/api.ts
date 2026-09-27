@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import { queryString } from '@/lib/query-string'
 import type { PagedResult } from '@/features/registry/types'
 import type { AgentRun, AgentRunEvent, CaseDetail, CaseStatus, CaseSummary, DecisionResult, DecisionType } from './types'
 
@@ -9,16 +10,6 @@ export interface CaseQuery {
   desc?: boolean
   status?: CaseStatus
   search?: string
-}
-
-function queryString(query: object): string {
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === null || value === '') continue
-    params.set(key, String(value))
-  }
-  const serialised = params.toString()
-  return serialised ? `?${serialised}` : ''
 }
 
 export const listCases = (query: CaseQuery) => api<PagedResult<CaseSummary>>(`/api/cases${queryString(query)}`)

@@ -17,6 +17,8 @@ const labels: Record<AgentEventType, string> = {
   ApprovalDecided: 'Decision recorded',
   RunFailed: 'Run failed',
   RunCompleted: 'Run finished',
+  StockHeld: 'Stock held',
+  StockReleased: 'Stock released',
 }
 
 /** Events that need the reader's attention are marked, and never by colour alone. */
@@ -53,6 +55,15 @@ function detail(event: AgentRunEvent): string {
       return text(p.reason)
     case 'RunCompleted':
       return text(p.outcome)
+    case 'StockHeld':
+      return [
+        `${text(p.packs)} pack(s) off sale until ${text(p.expiresAt).slice(0, 16).replace('T', ' ')} UTC`,
+        Array.isArray(p.batches) ? `from ${p.batches.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    case 'StockReleased':
+      return `Back on sale: ${text(p.reason)}`
     default:
       return ''
   }

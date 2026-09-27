@@ -41,7 +41,10 @@ public enum AgentEventType
     ApprovalRequested,
     ApprovalDecided,
     RunFailed,
-    RunCompleted
+    RunCompleted,
+    // The proposal's stock, held while it awaits approval and released if it is not approved.
+    StockHeld,
+    StockReleased
 }
 
 public enum ApprovalDecisionType { Approve, Reject, Revise }

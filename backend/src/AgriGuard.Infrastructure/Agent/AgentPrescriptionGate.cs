@@ -4,6 +4,7 @@ using AgriGuard.Application.Agent;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Validation;
 using AgriGuard.Domain.Cases;
+using AgriGuard.Domain.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,7 +53,7 @@ public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionVa
             dealerId,
             // V8 is reported as not evaluated until Component D's Open-Meteo client exists.
             Weather: null,
-            Stock: await LoadStockAsync(productId, dealerId, districtId, sprayDate, ct)), ct);
+            Stock: await LoadStockAsync(runId, productId, dealerId, districtId, sprayDate, ct)), ct);
 
         return new AgentVerdictTool(verdict.Outcome, verdict.Summary, verdict.Results);
     }
@@ -103,20 +104,32 @@ public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionVa
 
     /// <summary>
     /// The named dealer if there is one, otherwise the best-stocked dealer in the farm's district.
-    /// Only batches still in date on the spray date count, and only what is not already reserved.
+    /// Only batches still in date on the spray date count, and only what is not already reserved —
+    /// except by this run itself: stock held for this very proposal is available to it, so the
+    /// approval's re-check does not fail against the proposal's own hold.
     /// </summary>
-    private async Task<StockInput> LoadStockAsync(Guid productId, Guid? dealerId, Guid districtId, DateOnly sprayDate, CancellationToken ct)
+    private async Task<StockInput> LoadStockAsync(Guid runId, Guid productId, Guid? dealerId, Guid districtId, DateOnly sprayDate, CancellationToken ct)
     {
         var inDateOn = sprayDate == default ? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime) : sprayDate;
 
         var batches = db.InventoryBatches.AsNoTracking()
-            .Where(b => b.ProductId == productId && b.ExpiryDate > inDateOn && b.QuantityOnHand - b.QuantityReserved > 0);
+            .Where(b => b.ProductId == productId && b.ExpiryDate > inDateOn);
         batches = dealerId is { } id
             ? batches.Where(b => b.DealerId == id)
             : batches.Where(b => b.Dealer.DistrictId == districtId);
 
+        var ownHold = db.StockReservationLines
+            .Where(l => l.Reservation.AgentRunId == runId && l.Reservation.Status == ReservationStatus.Held);
+
         var rows = await batches
-            .Select(b => new { b.DealerId, Available = b.QuantityOnHand - b.QuantityReserved, b.ExpiryDate })
+            .Select(b => new
+            {
+                b.DealerId,
+                Available = b.QuantityOnHand - b.QuantityReserved
+                            + (ownHold.Where(l => l.BatchId == b.Id).Sum(l => (decimal?)l.Quantity) ?? 0m),
+                b.ExpiryDate
+            })
+            .Where(b => b.Available > 0)
             .ToListAsync(ct);
 
         var best = rows
