@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds talk to the dev API over plain http://10.0.2.2:5000 (the emulator's alias
+         for the host). Android blocks cleartext by default since API 28; this opt-in is merged
+         into debug builds only — release builds keep the secure default and use HTTPS. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

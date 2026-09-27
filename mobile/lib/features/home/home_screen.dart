@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
@@ -35,12 +36,12 @@ class HomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           if (user.role == UserRole.farmer) ...[
+            const _FeatureTile(icon: Icons.add_a_photo_outlined, title: 'Report a crop problem', subtitle: 'Symptoms and location', route: '/cases/new'),
+            const _FeatureTile(icon: Icons.receipt_long, title: 'My crop problems', subtitle: 'AI advice, review and prescriptions', route: '/cases'),
             const _FeatureTile(icon: Icons.landscape, title: 'My farms & plots', subtitle: 'Register plots and track crop cycles'),
-            const _FeatureTile(icon: Icons.camera_alt, title: 'Report a crop problem', subtitle: 'Photo, location and symptoms'),
-            const _FeatureTile(icon: Icons.receipt_long, title: 'Prescriptions', subtitle: 'Approved treatments and pickup'),
             const _FeatureTile(icon: Icons.local_shipping, title: 'Harvest collection', subtitle: 'Book a slot at a collection centre'),
           ] else if (user.role == UserRole.fieldAgronomist) ...[
-            const _FeatureTile(icon: Icons.fact_check, title: 'Cases in my district', subtitle: 'Field triage and follow-up'),
+            const _FeatureTile(icon: Icons.fact_check, title: 'Cases in my district', subtitle: 'Field triage and follow-up', route: '/cases'),
           ] else
             const _FeatureTile(icon: Icons.desktop_windows, title: 'Use the web console', subtitle: 'Dealer and administrator tools are on the web app'),
         ],
@@ -50,11 +51,14 @@ class HomeScreen extends ConsumerWidget {
 }
 
 class _FeatureTile extends StatelessWidget {
-  const _FeatureTile({required this.icon, required this.title, required this.subtitle});
+  const _FeatureTile({required this.icon, required this.title, required this.subtitle, this.route});
 
   final IconData icon;
   final String title;
   final String subtitle;
+
+  /// Where the tile leads; null for features not built yet.
+  final String? route;
 
   @override
   Widget build(BuildContext context) {
@@ -64,9 +68,11 @@ class _FeatureTile extends StatelessWidget {
         title: Text(title),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$title is coming in the next build.')),
-        ),
+        onTap: () => route != null
+            ? context.push(route!)
+            : ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$title is coming in the next build.')),
+              ),
       ),
     );
   }

@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/auth_controller.dart';
 import '../features/auth/login_screen.dart';
+import '../features/cases/case_detail_screen.dart';
+import '../features/cases/cases_screen.dart';
+import '../features/cases/new_case_screen.dart';
 import '../features/home/home_screen.dart';
 
 /// Bridges Riverpod → go_router: any auth change re-evaluates `redirect`.
@@ -37,6 +40,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/splash', builder: (_, _) => const _SplashScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+      GoRoute(
+        path: '/cases',
+        builder: (_, _) => const CasesScreen(),
+        routes: [
+          // Before ':caseId', so "new" is not read as a case id.
+          GoRoute(path: 'new', builder: (_, _) => const NewCaseScreen()),
+          GoRoute(
+            path: ':caseId',
+            builder: (_, state) => CaseDetailScreen(caseId: state.pathParameters['caseId']!),
+          ),
+        ],
+      ),
     ],
   );
 });
