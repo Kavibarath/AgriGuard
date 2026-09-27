@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_exception.dart';
 import '../../core/location/location_service.dart';
+import '../../core/photos/photo_source.dart';
 import 'case_models.dart';
+import 'case_photos.dart';
 import 'case_providers.dart';
 import 'case_repository.dart';
 import 'case_widgets.dart';
@@ -27,6 +29,7 @@ class _NewCaseScreenState extends ConsumerState<NewCaseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _note = TextEditingController();
   final Set<String> _symptoms = {};
+  final List<PickedPhoto> _photos = [];
   ReportablePlot? _plot;
   CaseSeverity _severity = CaseSeverity.medium;
 
@@ -59,6 +62,19 @@ class _NewCaseScreenState extends ConsumerState<NewCaseScreen> {
     }
   }
 
+  Future<void> _addPhoto(PhotoOrigin origin) async {
+    final photo = await ref.read(photoSourceProvider).pick(origin);
+    if (photo == null || !mounted) return; // cancelled
+    setState(() {
+      if (photo.bytes.length > maxPhotoBytes) {
+        _error = 'That photo is too large even after resizing. Try taking it again.';
+      } else {
+        _photos.add(photo);
+        _error = null;
+      }
+    });
+  }
+
   Future<void> _submit() async {
     final formValid = _formKey.currentState!.validate();
     if (_symptoms.isEmpty) {
@@ -84,8 +100,27 @@ class _NewCaseScreenState extends ConsumerState<NewCaseScreen> {
             longitude: _fix?.longitude ?? plot.longitude,
             farmerNote: _note.text,
           ));
+
+      // The case exists now, whatever happens to the photos: a failed upload must not lose the
+      // report. Anything that did not go up can be added again from the case page.
+      var failed = 0;
+      for (final photo in _photos) {
+        try {
+          await ref.read(caseRepositoryProvider).uploadPhoto(created.id, photo.bytes, photo.name);
+        } on ApiException {
+          failed++;
+        }
+      }
+
       ref.invalidate(myCasesProvider);
-      if (mounted) context.pushReplacement('/cases/${created.id}');
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      context.pushReplacement('/cases/${created.id}');
+      if (failed > 0) {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Problem reported, but $failed photo${failed == 1 ? '' : 's'} could not be sent. Add ${failed == 1 ? 'it' : 'them'} from this page.'),
+        ));
+      }
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } finally {
@@ -159,6 +194,27 @@ class _NewCaseScreenState extends ConsumerState<NewCaseScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    Text('Photos (optional)', style: Theme.of(context).textTheme.titleMedium),
+                    Text('A close-up of a damaged leaf helps the most (up to $maxPhotosPerCase).',
+                        style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 8),
+                    if (_photos.isNotEmpty) ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (var i = 0; i < _photos.length; i++)
+                            LocalPhotoThumb(
+                              bytes: _photos[i].bytes,
+                              index: i,
+                              onRemove: () => setState(() => _photos.removeAt(i)),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    AddPhotoButtons(onPick: _addPhoto, enabled: _photos.length < maxPhotosPerCase),
                     const SizedBox(height: 20),
                     Text('How bad is it?', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),

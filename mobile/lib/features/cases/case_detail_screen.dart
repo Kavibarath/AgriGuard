@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_exception.dart';
+import '../../core/photos/photo_source.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
 import 'case_models.dart';
+import 'case_photos.dart';
 import 'case_providers.dart';
 import 'case_repository.dart';
 import 'case_widgets.dart';
@@ -29,6 +31,7 @@ class CaseDetailScreen extends ConsumerStatefulWidget {
 class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
   Timer? _poll;
   bool _requesting = false;
+  bool _uploadingPhoto = false;
   String? _error;
 
   @override
@@ -55,6 +58,23 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
     } else {
       _poll?.cancel();
       _poll = null;
+    }
+  }
+
+  Future<void> _addPhoto(PhotoOrigin origin) async {
+    final photo = await ref.read(photoSourceProvider).pick(origin);
+    if (photo == null || !mounted) return;
+    setState(() {
+      _uploadingPhoto = true;
+      _error = null;
+    });
+    try {
+      await ref.read(caseRepositoryProvider).uploadPhoto(widget.caseId, photo.bytes, photo.name);
+      ref.invalidate(caseDetailProvider(widget.caseId));
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
     }
   }
 
@@ -119,6 +139,27 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
               if (c.farmerNote != null) ...[
                 const SizedBox(height: 8),
                 Text('“${c.farmerNote}”', style: const TextStyle(fontStyle: FontStyle.italic)),
+              ],
+              if (c.photos.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < c.photos.length; i++)
+                      CasePhotoThumb(caseId: c.id, photoId: c.photos[i].id, index: i),
+                  ],
+                ),
+              ],
+              if (c.status != CaseStatus.closed && c.photos.length < maxPhotosPerCase) ...[
+                const SizedBox(height: 12),
+                _uploadingPhoto
+                    ? const Row(children: [
+                        SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(width: 8),
+                        Text('Sending photo…'),
+                      ])
+                    : AddPhotoButtons(onPick: _addPhoto),
               ],
             ],
           ),

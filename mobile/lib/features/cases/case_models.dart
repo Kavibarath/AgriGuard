@@ -134,6 +134,23 @@ class RunSummary {
   final String? failureReason;
 }
 
+/// A leaf photo's metadata; the image is fetched separately, with the signed-in token.
+class CasePhoto {
+  const CasePhoto({required this.id, required this.fileName});
+
+  factory CasePhoto.fromJson(Map<String, dynamic> json) =>
+      CasePhoto(id: json['id'] as String, fileName: json['fileName'] as String);
+
+  final String id;
+  final String fileName;
+}
+
+/// The API accepts at most this many photos per case (ICasePhotoService.MaxPhotosPerCase).
+const maxPhotosPerCase = 3;
+
+/// And photos no bigger than this (ICasePhotoService.MaxPhotoBytes).
+const maxPhotoBytes = 2 * 1024 * 1024;
+
 class CaseDetail {
   const CaseDetail({
     required this.id,
@@ -147,6 +164,7 @@ class CaseDetail {
     required this.farmerNote,
     required this.createdAt,
     required this.runs,
+    this.photos = const [],
   });
 
   factory CaseDetail.fromJson(Map<String, dynamic> json) => CaseDetail(
@@ -165,6 +183,9 @@ class CaseDetail {
         runs: [
           for (final r in json['agentRuns'] as List) RunSummary.fromJson(r as Map<String, dynamic>),
         ],
+        photos: [
+          for (final p in (json['photos'] as List?) ?? const []) CasePhoto.fromJson(p as Map<String, dynamic>),
+        ],
       );
 
   final String id;
@@ -180,6 +201,9 @@ class CaseDetail {
 
   /// Newest first, as the API returns them.
   final List<RunSummary> runs;
+
+  /// Oldest first.
+  final List<CasePhoto> photos;
 
   RunSummary? get latestRun => runs.isEmpty ? null : runs.first;
 }

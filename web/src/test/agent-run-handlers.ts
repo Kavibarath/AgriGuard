@@ -55,6 +55,7 @@ export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail 
     reportedLatitude: 6.95,
     reportedLongitude: 80.79,
     createdAt: '2026-09-25T11:03:20Z',
+    photos: [],
     ...overrides,
   }
 }

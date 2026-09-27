@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { API_BASE_URL } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/auth-store'
 import { agronomist, authResponse, farmer, http, HttpResponse, problem, server } from '@/test/msw'
-import { INJECTED_NOTE, makeDecisionResult, makeRun, RUN_ID } from '@/test/agent-run-handlers'
+import { INJECTED_NOTE, makeCaseDetail, makeDecisionResult, makeRun, RUN_ID } from '@/test/agent-run-handlers'
 import { renderApp } from '@/test/render'
 
 function signIn(as = agronomist) {
@@ -168,6 +168,32 @@ describe('AgentRunPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Approve and issue' }))
 
     expect(await within(dialog).findByText(/no longer passes the safety rules/i)).toBeInTheDocument()
+  })
+
+  it('shows the farmer’s photos, fetched with the signed-in token, and enlarges one', async () => {
+    signIn()
+    const photoRequests: (string | null)[] = []
+    server.use(
+      http.get(`${API_BASE_URL}/api/cases/:id`, () =>
+        HttpResponse.json(
+          makeCaseDetail({
+            photos: [{ id: 'photo-1', fileName: 'leaf.jpg', contentType: 'image/jpeg', sizeBytes: 2048, uploadedAt: '2026-09-25T11:03:30Z' }],
+          }),
+        ),
+      ),
+      http.get(`${API_BASE_URL}/api/cases/:id/photos/:photoId`, ({ request }) => {
+        photoRequests.push(request.headers.get('Authorization'))
+        return new HttpResponse(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), { headers: { 'Content-Type': 'image/jpeg' } })
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp(`/agent-runs/${RUN_ID}`)
+
+    const thumb = await screen.findByRole('button', { name: /photo 1 from the farmer/i })
+    expect(photoRequests[0]).toMatch(/^Bearer /)
+
+    await user.click(thumb)
+    expect(await screen.findByRole('dialog', { name: 'Photo 1 of 1' })).toBeInTheDocument()
   })
 
   it('shows a non-agronomist the run but not the decision', async () => {

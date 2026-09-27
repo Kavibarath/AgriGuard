@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,6 +22,11 @@ abstract class CaseRepository {
 
   Future<List<ReportablePlot>> reportablePlots();
   Future<List<Symptom>> symptoms();
+
+  Future<CasePhoto> uploadPhoto(String caseId, Uint8List bytes, String fileName);
+
+  /// Through the signed-in client, so an expired token is refreshed like any other request.
+  Future<Uint8List> photoBytes(String caseId, String photoId);
 }
 
 class HttpCaseRepository implements CaseRepository {
@@ -77,6 +84,27 @@ class HttpCaseRepository implements CaseRepository {
   Future<List<Symptom>> symptoms() => _guard(() async {
         final response = await _dio.get<List<dynamic>>('/api/symptoms');
         return [for (final s in response.data!) Symptom.fromJson(s as Map<String, dynamic>)];
+      });
+
+  @override
+  Future<CasePhoto> uploadPhoto(String caseId, Uint8List bytes, String fileName) => _guard(() async {
+        final form = FormData.fromMap({'file': MultipartFile.fromBytes(bytes, filename: fileName)});
+        final response = await _dio.post<Map<String, dynamic>>(
+          '/api/cases/$caseId/photos',
+          data: form,
+          // A photo over a slow rural connection can take a while.
+          options: Options(sendTimeout: const Duration(seconds: 60)),
+        );
+        return CasePhoto.fromJson(response.data!);
+      });
+
+  @override
+  Future<Uint8List> photoBytes(String caseId, String photoId) => _guard(() async {
+        final response = await _dio.get<List<int>>(
+          '/api/cases/$caseId/photos/$photoId',
+          options: Options(responseType: ResponseType.bytes),
+        );
+        return Uint8List.fromList(response.data!);
       });
 
   Future<T> _guard<T>(Future<T> Function() call) async {

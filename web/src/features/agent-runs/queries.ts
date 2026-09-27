@@ -21,6 +21,14 @@ export const useCaseQueue = (query: agentRuns.CaseQuery) =>
 export const useCase = (id: string | undefined) =>
   useQuery({ queryKey: agentRunKeys.case(id ?? 'none'), queryFn: () => agentRuns.getCase(id!), enabled: id !== undefined })
 
+/** A stored photo never changes, so once fetched it is kept for the session. */
+export const useCasePhoto = (caseId: string, photoId: string) =>
+  useQuery({
+    queryKey: ['agent-runs', 'photo', caseId, photoId],
+    queryFn: () => agentRuns.getCasePhoto(caseId, photoId),
+    staleTime: Infinity,
+  })
+
 /**
  * Polls while the agent is working and stops once the run waits for a human or has ended — there
  * is nothing left to change by itself, so polling on would only cost requests.

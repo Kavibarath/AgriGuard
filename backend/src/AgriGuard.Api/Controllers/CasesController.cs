@@ -15,7 +15,7 @@ namespace AgriGuard.Api.Controllers;
 [ApiController]
 [Route("api/cases")]
 [Authorize(Policy = AuthPolicies.OwnsFarm)]
-public sealed class CasesController(ICaseService cases) : ControllerBase
+public sealed class CasesController(ICaseService cases, ICasePhotoService photos) : ControllerBase
 {
     /// <summary>The case queue: filter by status, crop, district, severity or plot; search by reference, plot or farmer.</summary>
     [HttpGet]
@@ -52,4 +52,45 @@ public sealed class CasesController(ICaseService cases) : ControllerBase
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public Task<CaseDetailDto> UpdateStatus(Guid id, UpdateCaseStatusRequest request, CancellationToken ct) =>
         cases.UpdateStatusAsync(id, request, ct);
+
+    /// <summary>
+    /// Adds a leaf photo (multipart field "file"): JPEG, PNG or WebP, at most 2 MB, up to three per
+    /// case. The type is read from the file's own bytes. Uploading the same photo again returns the
+    /// stored one (200) instead of a copy (201).
+    /// </summary>
+    [HttpPost("{id:guid}/photos")]
+    [EnableRateLimiting(RateLimitPolicies.Cases)]
+    [Consumes("multipart/form-data")]
+    // A little above 2 MB for the multipart framing; the service enforces the exact limit.
+    [RequestSizeLimit(PhotoRequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = PhotoRequestLimit)]
+    [ProducesResponseType<CasePhotoDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType<CasePhotoDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CasePhotoDto>> AddPhoto(Guid id, IFormFile file, CancellationToken ct)
+    {
+        await using var content = file.OpenReadStream();
+        var (photo, created) = await photos.AddAsync(id, new PhotoUpload(file.FileName, file.Length, content), ct);
+        return created
+            ? CreatedAtAction(nameof(GetPhoto), new { id, photoId = photo.Id }, photo)
+            : Ok(photo);
+    }
+
+    /// <summary>The photo itself, to anyone who can see the case.</summary>
+    [HttpGet("{id:guid}/photos/{photoId:guid}")]
+    [ProducesResponseType<FileContentResult>(StatusCodes.Status200OK, "image/jpeg", "image/png", "image/webp")]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPhoto(Guid id, Guid photoId, CancellationToken ct)
+    {
+        var photo = await photos.GetAsync(id, photoId, ct);
+        // Private: a farm photo must never sit in a shared proxy cache. Photos never change, so
+        // the browser may keep its own copy.
+        Response.Headers.CacheControl = "private, max-age=86400";
+        // The type was sniffed on upload; stop the browser second-guessing it.
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return File(photo.Bytes, photo.ContentType);
+    }
+
+    private const long PhotoRequestLimit = 3 * 1024 * 1024;
 }

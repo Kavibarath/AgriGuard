@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:agriguard_mobile/app/app.dart';
 import 'package:agriguard_mobile/app/router.dart';
 import 'package:agriguard_mobile/core/api/api_exception.dart';
 import 'package:agriguard_mobile/core/location/location_service.dart';
+import 'package:agriguard_mobile/core/photos/photo_source.dart';
 import 'package:agriguard_mobile/core/storage/token_storage.dart';
 import 'package:agriguard_mobile/features/cases/case_detail_screen.dart';
 import 'package:agriguard_mobile/features/cases/case_models.dart';
@@ -14,6 +18,17 @@ import 'package:mocktail/mocktail.dart';
 import 'fixtures.dart';
 
 class MockCaseRepository extends Mock implements CaseRepository {}
+
+/// Hands back the next queued photo, as if the farmer had taken it; empty means "cancelled".
+class FakePhotos implements PhotoSource {
+  final List<PickedPhoto> queue = [];
+
+  @override
+  Future<PickedPhoto?> pick(PhotoOrigin origin) async => queue.isEmpty ? null : queue.removeAt(0);
+}
+
+/// A real 1×1 PNG, so Image.memory has something it can decode.
+final tinyPng = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
 
 class FakeLocation implements LocationService {
   FakeLocation(this.fix);
@@ -74,13 +89,18 @@ final prescription = Prescription(
 
 void main() {
   late MockCaseRepository repository;
+  late FakePhotos photos;
 
-  setUpAll(() => registerFallbackValue(
-        const NewCase(plotId: '', cropCycleId: '', symptomCodes: [], severity: CaseSeverity.medium, latitude: 0, longitude: 0),
-      ));
+  setUpAll(() {
+    registerFallbackValue(
+      const NewCase(plotId: '', cropCycleId: '', symptomCodes: [], severity: CaseSeverity.medium, latitude: 0, longitude: 0),
+    );
+    registerFallbackValue(Uint8List(0));
+  });
 
   setUp(() {
     repository = MockCaseRepository();
+    photos = FakePhotos();
     when(() => repository.reportablePlots()).thenAnswer((_) async => [plot]);
     when(() => repository.symptoms()).thenAnswer((_) async => symptoms);
     when(() => repository.myCases()).thenAnswer((_) async => []);
@@ -100,6 +120,7 @@ void main() {
           tokenStorageProvider.overrideWithValue(InMemoryTokenStorage(farmerSession())),
           caseRepositoryProvider.overrideWithValue(repository),
           locationServiceProvider.overrideWithValue(FakeLocation(fix)),
+          photoSourceProvider.overrideWithValue(photos),
         ],
         child: const AgriGuardApp(),
       ),
@@ -186,6 +207,43 @@ void main() {
       await submit(tester);
 
       expect(find.textContaining('This crop cycle is Harvested'), findsOneWidget);
+    });
+
+    testWidgets('sends the photos after the case is created', (tester) async {
+      when(() => repository.reportCase(any())).thenAnswer((_) async => caseDetail());
+      when(() => repository.uploadPhoto(any(), any(), any()))
+          .thenAnswer((_) async => const CasePhoto(id: 'photo-1', fileName: 'leaf.jpg'));
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail());
+      photos.queue.add(PickedPhoto(bytes: tinyPng, name: 'leaf.jpg'));
+      await openApp(tester, '/cases/new');
+
+      await tester.tap(find.text('Take photo'));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Photo 1'), findsOneWidget);
+      await fillIn(tester);
+      await submit(tester);
+
+      verifyInOrder([
+        () => repository.reportCase(any()),
+        () => repository.uploadPhoto('case-1', tinyPng, 'leaf.jpg'),
+      ]);
+    });
+
+    testWidgets('keeps the report when a photo fails to send, and says so', (tester) async {
+      when(() => repository.reportCase(any())).thenAnswer((_) async => caseDetail());
+      when(() => repository.uploadPhoto(any(), any(), any()))
+          .thenThrow(ApiException(message: 'Could not reach AgriGuard.', isNetworkError: true));
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail());
+      photos.queue.add(PickedPhoto(bytes: tinyPng, name: 'leaf.jpg'));
+      await openApp(tester, '/cases/new');
+
+      await tester.tap(find.text('Take photo'));
+      await tester.pumpAndSettle();
+      await fillIn(tester);
+      await submit(tester);
+
+      expect(find.text('AG-2026-000007'), findsOneWidget);
+      expect(find.textContaining('1 photo could not be sent'), findsOneWidget);
     });
 
     testWidgets('explains when no plot has a crop growing', (tester) async {
@@ -279,6 +337,38 @@ void main() {
 
       expect(find.textContaining('did not approve'), findsOneWidget);
       expect(find.textContaining('Reason: Looks like bacterial wilt.'), findsOneWidget);
+    });
+
+    testWidgets('shows the case’s photos and adds another', (tester) async {
+      var stored = [const CasePhoto(id: 'photo-1', fileName: 'leaf.jpg')];
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => CaseDetail(
+            id: 'case-1',
+            referenceNo: 'AG-2026-000007',
+            status: CaseStatus.submitted,
+            severity: CaseSeverity.high,
+            plotCode: 'P-01',
+            cropName: 'Tomato',
+            stage: 'Flowering',
+            symptoms: symptoms,
+            farmerNote: null,
+            createdAt: DateTime.utc(2026, 9, 26),
+            runs: const [],
+            photos: stored,
+          ));
+      when(() => repository.photoBytes('case-1', any())).thenAnswer((_) async => tinyPng);
+      when(() => repository.uploadPhoto('case-1', any(), any())).thenAnswer((_) async {
+        stored = [...stored, const CasePhoto(id: 'photo-2', fileName: 'leaf2.jpg')];
+        return stored.last;
+      });
+      photos.queue.add(PickedPhoto(bytes: tinyPng, name: 'leaf2.jpg'));
+      await openApp(tester, '/cases/case-1');
+
+      expect(find.bySemanticsLabel(RegExp('Photo 1')), findsOneWidget);
+      await tester.tap(find.text('From gallery'));
+      await tester.pumpAndSettle();
+
+      verify(() => repository.uploadPhoto('case-1', tinyPng, 'leaf2.jpg')).called(1);
+      expect(find.bySemanticsLabel(RegExp('Photo 2')), findsOneWidget);
     });
 
     testWidgets('offers to try again when the AI could not finish', (tester) async {
