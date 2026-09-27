@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { caseStatusTone, runStatusTone, severityTone } from '@/components/ui/status-tones'
 import { useCurrentUser } from '@/features/auth/auth-store'
 import { can } from '@/features/auth/policies'
+import { CasePhotos } from './CasePhotos'
 import { DecisionPanel } from './DecisionPanel'
 import { PrescriptionCard, ProposalCard } from './ProposalCard'
 import { useCase, useRun, useRunEvents } from './queries'
@@ -128,6 +129,8 @@ function CaseContext({ detail }: { detail: CaseDetail }) {
           ))}
         </ul>
       </div>
+
+      <CasePhotos caseId={detail.id} photos={detail.photos ?? []} />
 
       {detail.farmerNote && (
         <figure>

@@ -103,6 +103,15 @@ export interface CaseDetail {
   reportedLatitude: number
   reportedLongitude: number
   createdAt: string
+  photos: CasePhoto[]
+}
+
+export interface CasePhoto {
+  id: string
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  uploadedAt: string
 }
 
 // ── Stored agent payloads ────────────────────────────────────────────────────

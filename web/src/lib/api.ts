@@ -82,10 +82,12 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   json?: unknown
   /** Attach the bearer token and refresh on 401. Default true. */
   auth?: boolean
+  /** 'blob' for binary responses such as case photos. Default 'json'. */
+  responseType?: 'json' | 'blob'
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { json, auth = true, headers, ...init } = options
+  const { json, auth = true, responseType = 'json', headers, ...init } = options
 
   const send = (accessToken: string | null) =>
     fetch(`${API_BASE_URL}${path}`, {
@@ -117,6 +119,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
 
   if (response.status === 204) return undefined as T
+  if (responseType === 'blob') return (await response.blob()) as T
   return (await response.json()) as T
 }
 

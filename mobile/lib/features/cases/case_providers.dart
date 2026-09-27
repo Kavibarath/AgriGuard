@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'case_models.dart';
@@ -19,6 +21,13 @@ final prescriptionProvider = FutureProvider.autoDispose.family<Prescription?, St
 final reportablePlotsProvider = FutureProvider.autoDispose<List<ReportablePlot>>(
   (ref) => ref.watch(caseRepositoryProvider).reportablePlots(),
 );
+
+/// A photo's bytes, keyed "caseId/photoId". Photos never change, so once loaded they are kept
+/// while anything on screen shows them.
+final photoBytesProvider = FutureProvider.autoDispose.family<Uint8List, String>((ref, key) {
+  final [caseId, photoId] = key.split('/');
+  return ref.watch(caseRepositoryProvider).photoBytes(caseId, photoId);
+});
 
 /// The checklist changes perhaps once a season: kept for the whole session once loaded.
 final symptomsProvider = FutureProvider<List<Symptom>>(

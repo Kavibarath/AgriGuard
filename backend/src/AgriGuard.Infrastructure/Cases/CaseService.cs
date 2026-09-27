@@ -192,6 +192,11 @@ public sealed class CaseService(
         c.AgentRuns
             .OrderByDescending(r => r.CreatedAt)
             .Select(r => new AgentRunSummaryDto(r.Id, r.Status, r.RevisionCount, r.FailureReason, r.CreatedAt, r.CompletedAt))
+            .ToList(),
+        // Metadata only: the image bytes stay in the database until someone opens the photo.
+        c.Attachments
+            .OrderBy(a => a.UploadedAt)
+            .Select(a => new CasePhotoDto(a.Id, a.FileName, a.ContentType, a.SizeBytes, a.UploadedAt))
             .ToList());
 
     /// <summary>Symptom labels come from the in-code catalogue, so they are attached after the query.</summary>
@@ -202,7 +207,7 @@ public sealed class CaseService(
         r.SymptomCodes.Select(code => new SymptomDto(code, SymptomCatalogue.All.GetValueOrDefault(code, code))).ToList(),
         r.FarmerNote, r.ReportedLatitude, r.ReportedLongitude,
         r.AssignedAgronomistId, r.AssignedAgronomistName, r.ConfirmedPathogenCode,
-        r.CreatedAt, r.UpdatedAt, r.Runs);
+        r.CreatedAt, r.UpdatedAt, r.Runs, r.Photos);
 
     private sealed record CaseRow(
         Guid Id,
@@ -229,5 +234,6 @@ public sealed class CaseService(
         string? ConfirmedPathogenCode,
         DateTime CreatedAt,
         DateTime UpdatedAt,
-        List<AgentRunSummaryDto> Runs);
+        List<AgentRunSummaryDto> Runs,
+        List<CasePhotoDto> Photos);
 }

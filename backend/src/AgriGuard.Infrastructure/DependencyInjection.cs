@@ -72,6 +72,7 @@ public static class DependencyInjection
 
         // Component B — cases and the agent workflow
         services.AddScoped<ICaseService, CaseService>();
+        services.AddScoped<ICasePhotoService, CasePhotoService>();
         services.AddScoped<IAgentRunService, AgentRunService>();
         services.AddScoped<IApprovalService, ApprovalService>();
         services.AddScoped<IAgentCallbackService, AgentCallbackService>();

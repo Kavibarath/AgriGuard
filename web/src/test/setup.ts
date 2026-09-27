@@ -16,3 +16,7 @@ afterEach(() => {
 afterAll(() => server.close())
 
 installAuthProvider()
+
+// jsdom has no object URLs; case photos are shown through them.
+URL.createObjectURL ??= () => 'blob:test-photo'
+URL.revokeObjectURL ??= () => {}

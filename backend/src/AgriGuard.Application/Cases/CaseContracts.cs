@@ -57,9 +57,18 @@ public sealed record CaseDetailDto(
     string? ConfirmedPathogenCode,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    IReadOnlyList<AgentRunSummaryDto> AgentRuns);
+    IReadOnlyList<AgentRunSummaryDto> AgentRuns,
+    IReadOnlyList<CasePhotoDto> Photos);
 
 public sealed record SymptomDto(string Code, string Label);
+
+/// <summary>A photo's metadata. The image itself is fetched from GET /api/cases/{id}/photos/{photoId}.</summary>
+public sealed record CasePhotoDto(Guid Id, string FileName, string ContentType, long SizeBytes, DateTime UploadedAt);
+
+/// <summary>An upload as it arrives, kept free of ASP.NET types so the service is testable without HTTP.</summary>
+public sealed record PhotoUpload(string? FileName, long Length, Stream Content);
+
+public sealed record PhotoContent(byte[] Bytes, string ContentType, string FileName);
 
 public sealed record AgentRunSummaryDto(
     Guid Id,
@@ -160,6 +169,23 @@ public interface ICaseService
     Task<CaseDetailDto> GetAsync(Guid id, CancellationToken ct = default);
     Task<CaseDetailDto> CreateAsync(CreateCaseRequest request, CancellationToken ct = default);
     Task<CaseDetailDto> UpdateStatusAsync(Guid id, UpdateCaseStatusRequest request, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Leaf photos on a case (§8 device feature). Anyone who can see the case may add one, up to
+/// <see cref="MaxPhotosPerCase"/>; the bytes are checked to be a real image, not trusted by name.
+/// </summary>
+public interface ICasePhotoService
+{
+    public const int MaxPhotosPerCase = 3;
+
+    /// <summary>Matches the database CHECK on case_attachments.size_bytes.</summary>
+    public const int MaxPhotoBytes = 2 * 1024 * 1024;
+
+    /// <summary>Returns the stored photo and whether it was new; the same photo again is not stored twice.</summary>
+    Task<(CasePhotoDto Photo, bool Created)> AddAsync(Guid caseId, PhotoUpload upload, CancellationToken ct = default);
+
+    Task<PhotoContent> GetAsync(Guid caseId, Guid photoId, CancellationToken ct = default);
 }
 
 /// <summary>Component B — the user-facing side of agent runs.</summary>

@@ -49,6 +49,10 @@ internal sealed class CaseAttachmentConfiguration : IEntityTypeConfiguration<Cas
             .HasForeignKey(x => x.CaseId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // The same photo once per case: a phone retrying an upload after a dropped connection
+        // gets the photo it already sent back, not a second copy — even if both land at once.
+        b.HasIndex(x => new { x.CaseId, x.Sha256 }).IsUnique();
+
         b.ToTable(t => t.HasCheckConstraint("ck_case_attachments_size", "size_bytes > 0 AND size_bytes <= 2097152"));
     }
 }
