@@ -34,6 +34,12 @@ public static class AuthPolicies
     /// <summary>Maintain stock, batches and pricing. Agro-Dealer only.</summary>
     public const string ManagesInventory = "ManagesInventory";
 
+    /// <summary>
+    /// Read stock valuation and low-stock reports. A dealer (their own shop) and the co-op
+    /// administrator (every shop); reading is wider than <see cref="ManagesInventory"/>, changing is not.
+    /// </summary>
+    public const string ViewsStockReports = "ViewsStockReports";
+
     /// <summary>Maintain regulatory rules, collection slots and users. Co-op Administrator only.</summary>
     public const string AdministersRules = "AdministersRules";
 

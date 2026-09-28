@@ -9,6 +9,8 @@ export const inventoryKeys = {
   reservations: (query: inventory.ReservationQuery) => ['inventory', 'reservations', query] as const,
   orders: (query: inventory.OrderQuery) => ['inventory', 'orders', query] as const,
   rules: (query: inventory.RuleQuery) => ['rules', query] as const,
+  stockValuation: (dealerId?: string) => ['inventory', 'stock-valuation', dealerId ?? 'all'] as const,
+  lowStock: (dealerId?: string) => ['inventory', 'low-stock', dealerId ?? 'all'] as const,
 }
 
 export const useProducts = (query: inventory.ProductQuery) =>
@@ -25,6 +27,12 @@ export const useOrders = (query: inventory.OrderQuery) =>
 
 export const useRules = (query: inventory.RuleQuery) =>
   useQuery({ queryKey: inventoryKeys.rules(query), queryFn: () => inventory.listRules(query) })
+
+export const useStockValuation = (dealerId?: string, enabled = true) =>
+  useQuery({ queryKey: inventoryKeys.stockValuation(dealerId), queryFn: () => inventory.getStockValuation(dealerId), enabled })
+
+export const useLowStock = (dealerId?: string, enabled = true) =>
+  useQuery({ queryKey: inventoryKeys.lowStock(dealerId), queryFn: () => inventory.getLowStock({ dealerId }), enabled })
 
 /**
  * A hold, a commit or a recount changes the batch table, the holds list and the availability

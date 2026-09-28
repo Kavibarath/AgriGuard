@@ -56,6 +56,7 @@ public sealed record HarvestForecastQuery : PageRequest
 {
     public Guid? CropCycleId { get; init; }
     public Guid? DistrictId { get; init; }
+    public Guid? CropId { get; init; }
     public DateOnly? From { get; init; }
     public DateOnly? To { get; init; }
 }

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 namespace AgriGuard.Api.Authorization;
 
 /// <summary>
-/// The four role policies from §1.1 of the plan. They are enforced here, on the server, for every
+/// The role policies from §1.1 of the plan. They are enforced here, on the server, for every
 /// client: the React app hiding a button is convenience, this is the control — Flutter and curl
 /// never see the React guard at all.
 ///
@@ -29,6 +29,9 @@ public static class AuthorizationSetup
             options.AddPolicy(AuthPolicies.CanApprovePrescriptions, RoleIn(UserRole.FieldAgronomist));
 
             options.AddPolicy(AuthPolicies.ManagesInventory, RoleIn(UserRole.AgroDealer));
+
+            // The administrator oversees every shop's stock but does not run one.
+            options.AddPolicy(AuthPolicies.ViewsStockReports, RoleIn(UserRole.AgroDealer, UserRole.CoopAdministrator));
 
             options.AddPolicy(AuthPolicies.AdministersRules, RoleIn(UserRole.CoopAdministrator));
 

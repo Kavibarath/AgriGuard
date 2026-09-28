@@ -1,7 +1,7 @@
 import { Role } from './types'
 
 /**
- * Client-side mirror of AuthorizationSetup.cs — the same four policies, the same roles.
+ * Client-side mirror of AuthorizationSetup.cs — the same policies, the same roles.
  *
  * This decides what the UI *shows* (navigation, disabled buttons with an explanation).
  * It is not a security boundary: the API re-checks every request against its own copy, and a
@@ -10,6 +10,7 @@ import { Role } from './types'
 export const policies = {
   CanApprovePrescriptions: [Role.FieldAgronomist],
   ManagesInventory: [Role.AgroDealer],
+  ViewsStockReports: [Role.AgroDealer, Role.CoopAdministrator],
   AdministersRules: [Role.CoopAdministrator],
   OwnsFarm: [Role.Farmer, Role.FieldAgronomist, Role.CoopAdministrator],
 } as const satisfies Record<string, readonly Role[]>

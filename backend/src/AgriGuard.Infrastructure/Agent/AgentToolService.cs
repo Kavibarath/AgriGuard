@@ -2,6 +2,7 @@ using System.Globalization;
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
+using AgriGuard.Application.Intelligence;
 using AgriGuard.Domain.Registry;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Registry;
@@ -18,7 +19,7 @@ public sealed class AgentToolService(
     AgriGuardDbContext db,
     AgentPrescriptionGate prescriptionGate,
     SafetyProfileService safetyProfiles,
-    TimeProvider timeProvider,
+    IOutbreakSignalService outbreakSignals,
     FarmCalendar calendar) : IAgentToolService
 {
     private DateOnly Today => calendar.Today;
@@ -98,38 +99,17 @@ public sealed class AgentToolService(
     }
 
     /// <summary>
-    /// Disease pressure for a crop in a district over a recent window, from cases an agronomist has
-    /// confirmed. A deliberately simple index; Component D's intelligence endpoint refines it.
+    /// Disease pressure for the crop in the district: Component D's outbreak signal, the very
+    /// calculation behind GET /api/intelligence/outbreak-signal, trimmed to what the Diagnosis agent reads.
     /// </summary>
     public async Task<OutbreakSignalTool> GetOutbreakSignalAsync(Guid cropId, Guid districtId, int days, CancellationToken ct = default)
     {
-        days = Math.Clamp(days, 1, 90);
-        var since = timeProvider.GetUtcNow().UtcDateTime.AddDays(-days);
+        var signal = await outbreakSignals.ComputeAsync(new OutbreakSignalQuery { CropId = cropId, DistrictId = districtId, Days = days }, ct);
 
-        var recent = db.CropCases.AsNoTracking()
-            .Where(c => c.DistrictId == districtId && c.CropCycle.CropId == cropId && c.CreatedAt >= since);
-
-        var total = await recent.CountAsync(ct);
-        var confirmed = await recent
-            .Where(c => c.ConfirmedPathogenId != null)
-            .GroupBy(c => new { c.ConfirmedPathogen!.Code, c.ConfirmedPathogen.CommonName })
-            .Select(g => new ConfirmedPathogenCountTool(g.Key.Code, g.Key.CommonName, g.Count()))
-            .ToListAsync(ct);
-        confirmed = [.. confirmed.OrderByDescending(p => p.Cases).ThenBy(p => p.Code, StringComparer.Ordinal)];
-
-        var top = confirmed.FirstOrDefault();
-        var pressure = top?.Cases switch
-        {
-            >= 5 => "High",
-            >= 2 => "Moderate",
-            _ => "Low"
-        };
-
-        var summary = top is null
-            ? $"No confirmed outbreaks of this crop in the district in the last {days} days ({total} case(s) reported)."
-            : $"{top.CommonName} pressure {pressure.ToLowerInvariant()} in this district ({top.Cases} confirmed case(s) in {days} days; {total} reported in total).";
-
-        return new OutbreakSignalTool(cropId, districtId, days, total, pressure, summary, confirmed);
+        return new OutbreakSignalTool(
+            cropId, districtId, signal.WindowDays, signal.ReportedCases,
+            signal.Level.ToString(), signal.PressureIndex, signal.Trend.ToString(), signal.Summary,
+            [.. signal.TopPathogens.Select(p => new ConfirmedPathogenCountTool(p.Code, p.Name, p.ConfirmedCases, p.SharePercent))]);
     }
 
     /// <summary>

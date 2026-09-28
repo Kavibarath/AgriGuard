@@ -7,6 +7,9 @@ import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { InventoryPage } from '@/features/inventory/InventoryPage'
 import { OrdersPage } from '@/features/inventory/OrdersPage'
+import { CollectionPlannerPage } from '@/features/harvest/CollectionPlannerPage'
+import { HarvestPage } from '@/features/harvest/HarvestPage'
+import { IntelligencePage } from '@/features/intelligence/IntelligencePage'
 import { FarmDetailPage } from '@/features/registry/FarmDetailPage'
 import { FarmsPage } from '@/features/registry/FarmsPage'
 import { RulesPage } from '@/features/rules/RulesPage'
@@ -18,6 +21,8 @@ export const routes: RouteObject[] = [
     element: <ProtectedRoute />,
     children: [
       { path: '/dashboard', element: <DashboardPage /> },
+      // Component D's outbreak view is an aggregate with no farmer in it: every signed-in role.
+      { path: '/intelligence', element: <IntelligencePage /> },
       // Component A. The OwnsFarm policy admits farmers, agronomists and administrators;
       // the API decides which rows each of them actually sees.
       {
@@ -29,6 +34,9 @@ export const routes: RouteObject[] = [
           // is Field Agronomist only, enforced by the API and explained in the decision panel.
           { path: '/agent-runs', element: <AgentRunsPage /> },
           { path: '/agent-runs/:runId', element: <AgentRunPage /> },
+          // Component D. Forecasts and bookings are scoped by the API like the registry.
+          { path: '/harvest', element: <HarvestPage /> },
+          { path: '/collection-planner', element: <CollectionPlannerPage /> },
         ],
       },
       // Component C. A dealer's own shelf and orders; the API limits every row to their shop.

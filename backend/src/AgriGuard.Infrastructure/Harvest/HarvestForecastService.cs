@@ -32,6 +32,8 @@ public sealed class HarvestForecastService(AgriGuardDbContext db, ICurrentUserAc
             forecasts = forecasts.Where(f => f.CropCycleId == cycleId);
         if (query.DistrictId is { } districtId)
             forecasts = forecasts.Where(f => f.CropCycle.Plot.Farm.DistrictId == districtId);
+        if (query.CropId is { } cropId)
+            forecasts = forecasts.Where(f => f.CropCycle.CropId == cropId);
         if (query.From is { } from)
             forecasts = forecasts.Where(f => f.ForecastHarvestDate >= from);
         if (query.To is { } to)

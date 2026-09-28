@@ -87,6 +87,30 @@ export const orderStatusTone: Record<string, Tone> = {
   Cancelled: 'danger',
 }
 
+/** Disease pressure: the warm tones are the alarm, and the label always says which level. */
+export const pressureTone: Record<string, Tone> = {
+  None: 'neutral',
+  Low: 'neutral',
+  Moderate: 'warning',
+  High: 'danger',
+  Severe: 'danger',
+}
+
+/** Dealer stock: out of stock is the emergency, low is the reminder. */
+export const stockLevelTone: Record<string, Tone> = {
+  OutOfStock: 'danger',
+  Low: 'warning',
+  Sufficient: 'neutral',
+}
+
+export const bookingStatusTone: Record<string, Tone> = {
+  Booked: 'active',
+  CheckedIn: 'warning',
+  Completed: 'done',
+  Cancelled: 'neutral',
+  NoShow: 'danger',
+}
+
 export const verdictTone: Record<string, Tone> = {
   Approved: 'done',
   Revise: 'warning',

@@ -30,7 +30,8 @@ namespace AgriGuard.Infrastructure.Cases;
 ///   4. the Prescription is issued, with the earliest safe harvest date;
 ///   5. the InputOrder is confirmed for the dealer;
 ///   6. a ChemicalApplication is scheduled, so the next proposal's V6/V7 count this spray;
-///   7. the case becomes Prescribed, the run Completed, and the decision and events are appended.
+///   7. the case becomes Prescribed with its diagnosis confirmed (feeding the outbreak signal), the
+///      run Completed, and the decision and events are appended.
 ///
 /// **Reject** ends the run and releases the held stock. **Revise** releases it too and sends the same run back to the agent with the agronomist's
 /// reason as guidance, at most <see cref="MaxHumanRevisions"/> times.
@@ -248,6 +249,11 @@ public sealed class ApprovalService(
         var safeHarvest = sprayDate.AddDays(rule.PreHarvestIntervalDays);
         var unit = product.Unit == ProductUnit.Litre ? "L" : "kg";
         var prescriptionNo = await NextNumberAsync(AgriGuardDbContext.PrescriptionSequence, "RX", ct);
+
+        // Approving a treatment for a disease confirms the diagnosis it was written for. The case
+        // then counts towards its district's outbreak signal (Component D).
+        var diagnosedPathogenId = await DiagnosedPathogenAsync(run.FinalOutcomeJson, ct);
+        run.Case.ConfirmedPathogenId ??= diagnosedPathogenId;
         var prescription = new Prescription
         {
             PrescriptionNo = prescriptionNo,
@@ -255,7 +261,7 @@ public sealed class ApprovalService(
             AgentRunId = run.Id,
             CropCycleId = run.Case.CropCycleId,
             ProductId = productId,
-            DiagnosedPathogenId = await DiagnosedPathogenAsync(run.FinalOutcomeJson, ct),
+            DiagnosedPathogenId = diagnosedPathogenId,
             DosePerHectare = dose,
             TotalQuantity = total,
             SprayDate = sprayDate,

@@ -90,17 +90,22 @@ public sealed record ApplicationTool(
     decimal DosePerHectare,
     string Status);
 
+/// <summary>The same calculation as GET /api/intelligence/outbreak-signal (Domain.Intelligence.OutbreakSignal).</summary>
 public sealed record OutbreakSignalTool(
     Guid CropId,
     Guid DistrictId,
     int WindowDays,
     int CasesInWindow,
-    // Low | Moderate | High, from confirmed diagnoses in the window.
+    // None | Low | Moderate | High | Severe: bands of the 0–100 pressure index.
     string Pressure,
+    int PressureIndex,
+    // Rising | Steady | Falling.
+    string Trend,
     string Summary,
+    // Highest pressure first.
     IReadOnlyList<ConfirmedPathogenCountTool> ConfirmedPathogens);
 
-public sealed record ConfirmedPathogenCountTool(string Code, string CommonName, int Cases);
+public sealed record ConfirmedPathogenCountTool(string Code, string CommonName, int Cases, int SharePercent);
 
 public sealed record ApprovedProductsTool(IReadOnlyList<ApprovedProductTool> Products);
 

@@ -3,18 +3,22 @@ using AgriGuard.Application.Auth;
 using AgriGuard.Application.Cases;
 using AgriGuard.Application.Common;
 using AgriGuard.Application.Harvest;
+using AgriGuard.Application.Intelligence;
 using AgriGuard.Application.Inventory;
 using AgriGuard.Application.Registry;
+using AgriGuard.Application.Reports;
 using AgriGuard.Application.Validation;
 using AgriGuard.Application.Weather;
 using AgriGuard.Infrastructure.Agent;
 using AgriGuard.Infrastructure.Cases;
 using AgriGuard.Infrastructure.Harvest;
 using AgriGuard.Infrastructure.Identity;
+using AgriGuard.Infrastructure.Intelligence;
 using AgriGuard.Infrastructure.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
 using AgriGuard.Infrastructure.Registry;
+using AgriGuard.Infrastructure.Reports;
 using AgriGuard.Infrastructure.Validation;
 using AgriGuard.Infrastructure.Weather;
 using Microsoft.EntityFrameworkCore;
@@ -153,6 +157,13 @@ public static class DependencyInjection
         services.AddScoped<IHarvestWindowService, HarvestWindowService>();
         services.AddScoped<IHarvestForecastService, HarvestForecastService>();
         services.AddScoped<ICollectionService, CollectionService>();
+        services.AddScoped<IOutbreakSignalService, OutbreakSignalService>();
+
+        // Reports (§5.1): one read-only service per owning component's reports
+        services.AddScoped<IHarvestReportService, HarvestReportService>();
+        services.AddScoped<IRegistryReportService, RegistryReportService>();
+        services.AddScoped<ICaseReportService, CaseReportService>();
+        services.AddScoped<IStockReportService, StockReportService>();
 
         services.AddOptions<InventoryOptions>().Bind(configuration.GetSection(InventoryOptions.SectionName));
         // Registered as itself too, so tests can run one sweep on demand.
@@ -172,6 +183,7 @@ public static class DependencyInjection
             await DemoInventorySeeder.SeedAsync(db, TimeProvider.System, ct);
             await DemoDryZoneSeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), TimeProvider.System, ct);
             await DemoCollectionSeeder.SeedAsync(db, TimeProvider.System, ct);
+            await DemoHistorySeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), TimeProvider.System, ct);
         }
     }
 }
