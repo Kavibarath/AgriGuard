@@ -94,7 +94,7 @@ public sealed class PrescriptionValidationService(
             HasRestrictedUsePermit: false,
             cycle.OwnerCreditLimit,
             estimatedCost,
-            request.Weather is { } w ? new WeatherAssessment(w.RainProbabilityPercent, w.WindSpeedKph, w.TemperatureC) : null,
+            request.Weather is { } w ? new WeatherAssessment(w.RainProbabilityPercent, w.WindSpeedKph, w.TemperatureC, w.ExpectedRainMm) : null,
             request.Stock is { } s ? new StockAssessment(s.AvailableQuantity, s.EarliestBatchExpiry) : null);
 
         var proposal = new PrescriptionProposal(

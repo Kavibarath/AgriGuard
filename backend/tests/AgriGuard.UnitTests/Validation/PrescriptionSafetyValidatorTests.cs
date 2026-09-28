@@ -343,6 +343,25 @@ public sealed class PrescriptionSafetyValidatorTests
             Assert.Contains("chance of rain", Rule(verdict, "V8").Message);
         }
 
+        [Fact]
+        public void Asks_for_a_revision_when_likely_rain_is_enough_to_wash_it_off()
+        {
+            var verdict = Validate(context: Context(weather: new WeatherAssessment(70, 5m, 26m, ExpectedRainMm: 4m)));
+
+            Assert.Equal(ValidationOutcome.Revise, verdict.Outcome);
+            Assert.Contains("70% chance of 4 mm of rain", Rule(verdict, "V8").Message);
+        }
+
+        [Fact]
+        public void Does_not_refuse_a_likely_drizzle_too_light_to_wash_the_spray_off()
+        {
+            // 50% chance, but 0.2 mm in total before the spray is rainfast: not wash-off rain.
+            var verdict = Validate(context: Context(weather: new WeatherAssessment(50, 5m, 22m, ExpectedRainMm: 0.2m)));
+
+            Assert.Equal(RuleStatus.Passed, Rule(verdict, "V8").Status);
+            Assert.Contains("0.2 mm", Rule(verdict, "V8").Message);
+        }
+
         [Theory]
         [InlineData(10, 20, 26, "drift")]
         [InlineData(10, 5, 35, "too hot")]

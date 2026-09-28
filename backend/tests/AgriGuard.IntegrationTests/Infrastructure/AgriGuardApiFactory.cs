@@ -1,5 +1,6 @@
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
+using AgriGuard.Application.Weather;
 using AgriGuard.Domain.Identity;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -28,6 +29,9 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
 
     /// <summary>Replaces the HTTP dispatcher: tests never need the Python service running.</summary>
     public FakeAgentDispatcher Dispatcher { get; } = new();
+
+    /// <summary>Replaces Open-Meteo: tests never reach the internet. Calm, dry weather unless a test says otherwise.</summary>
+    public FakeWeatherProvider Weather { get; } = new();
 
     // Same major version as docker-compose.yml, so tests exercise what we run locally.
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
@@ -59,6 +63,8 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
             services.AddControllers().AddApplicationPart(typeof(AgriGuardApiFactory).Assembly);
             services.RemoveAll<IAgentDispatcher>();
             services.AddSingleton<IAgentDispatcher>(Dispatcher);
+            services.RemoveAll<IWeatherProvider>();
+            services.AddSingleton<IWeatherProvider>(Weather);
         });
     }
 

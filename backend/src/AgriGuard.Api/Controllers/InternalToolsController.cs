@@ -1,5 +1,6 @@
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
+using AgriGuard.Application.Weather;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -14,7 +15,7 @@ namespace AgriGuard.Api.Controllers;
 [ApiController]
 [Route("internal/tools")]
 [Authorize(Policy = AuthPolicies.AgentService)]
-public sealed class InternalToolsController(IAgentToolService tools) : ControllerBase
+public sealed class InternalToolsController(IAgentToolService tools, ISprayWindowService sprayWindows) : ControllerBase
 {
     /// <summary>get_case_detail — the case, its crop and plot, and candidate pathogens.</summary>
     [HttpGet("case-detail")]
@@ -25,6 +26,18 @@ public sealed class InternalToolsController(IAgentToolService tools) : Controlle
     [HttpGet("crop-history")]
     public Task<CropHistoryTool> CropHistory([FromQuery, BindRequired] Guid cropCycleId, CancellationToken ct) =>
         tools.GetCropHistoryAsync(cropCycleId, ct);
+
+    /// <summary>
+    /// get_weather_forecast — the plot's coming days judged for spraying (the same judgement as rule
+    /// V8), plus the last 48 hours' rain and humidity, which the Diagnosis agent weighs.
+    /// </summary>
+    [HttpGet("weather-forecast")]
+    public Task<SprayWindowDto> WeatherForecast(
+        [FromQuery, BindRequired] Guid plotId,
+        [FromQuery] int days = 7,
+        [FromQuery] Guid? productId = null,
+        CancellationToken ct = default) =>
+        sprayWindows.ComputeAsync(plotId, days, productId, ct);
 
     /// <summary>get_regional_outbreak_signal — confirmed disease pressure for the crop in the district.</summary>
     [HttpGet("outbreak-signal")]
