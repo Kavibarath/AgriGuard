@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/Modal'
 import { TextareaField } from '@/components/ui/textarea'
 import { userMessage } from '@/lib/api'
+import { formatDose } from './format'
 import { useDecide } from './queries'
 import type { AgentRun, DecisionType } from './types'
 
@@ -100,7 +101,7 @@ export function DecisionPanel({ run, canDecide }: { run: AgentRun; canDecide: bo
         title={open ? copy[open].title : ''}
         description={
           open === 'Approve'
-            ? `This issues the prescription${proposal ? ` for ${run.proposedProductName ?? 'the proposed product'} (${proposal.dose_per_hectare} per ha, spraying ${proposal.spray_date})` : ''}, confirms the dealer order and takes the stock off the shelf. The rules are checked once more first.`
+            ? `This issues the prescription${proposal ? ` for ${run.proposedProductName ?? 'the proposed product'} (${formatDose(proposal.dose_per_hectare, run.proposedProductUnit)}, spraying ${proposal.spray_date})` : ''}, confirms the dealer order and takes the stock off the shelf. The rules are checked once more first.`
             : open === 'Revise'
               ? 'The agent drafts a new proposal with your reason as guidance. The case stays open.'
               : 'The run ends and nothing is issued. The case moves to Rejected for manual follow-up.'

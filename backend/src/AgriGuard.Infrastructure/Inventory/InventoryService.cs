@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Linq.Expressions;
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Common.Models;
@@ -12,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AgriGuard.Infrastructure.Inventory;
 
 /// <summary>A dealer's own shelf: batches received, counted and repriced. Holds are <see cref="ReservationService"/>.</summary>
-public sealed class InventoryService(AgriGuardDbContext db, ICurrentUserAccessor currentUser, TimeProvider timeProvider) : IInventoryService
+public sealed class InventoryService(AgriGuardDbContext db, ICurrentUserAccessor currentUser, FarmCalendar calendar) : IInventoryService
 {
     private static readonly Dictionary<string, Expression<Func<InventoryBatch, object>>> Sortable = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -23,7 +24,7 @@ public sealed class InventoryService(AgriGuardDbContext db, ICurrentUserAccessor
         ["available"] = b => b.QuantityOnHand - b.QuantityReserved
     };
 
-    private DateOnly Today => DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+    private DateOnly Today => calendar.Today;
 
     public async Task<PagedResult<InventoryBatchDto>> ListAsync(InventoryQuery query, CancellationToken ct = default)
     {

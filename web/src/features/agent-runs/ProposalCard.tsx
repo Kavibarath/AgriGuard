@@ -1,7 +1,17 @@
+import { formatAmount, formatDose } from './format'
 import type { IssuedPrescription, Proposal } from './types'
+import type { ProductUnit } from '@/features/inventory/types'
 
 /** What the Action agent proposed. Its justification is shown as the model's words, nothing more. */
-export function ProposalCard({ proposal, productName }: { proposal: Proposal; productName: string | null }) {
+export function ProposalCard({
+  proposal,
+  productName,
+  productUnit,
+}: {
+  proposal: Proposal
+  productName: string | null
+  productUnit: ProductUnit | null
+}) {
   return (
     <section aria-labelledby="proposal-heading" className="space-y-3 rounded-lg border border-stone-200 bg-white p-4">
       <h2 id="proposal-heading" className="font-medium text-stone-900">
@@ -9,8 +19,8 @@ export function ProposalCard({ proposal, productName }: { proposal: Proposal; pr
       </h2>
       <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <Item label="Product" value={productName ?? proposal.product_id} />
-        <Item label="Dose" value={`${proposal.dose_per_hectare} per ha`} />
-        <Item label="Total quantity" value={String(proposal.total_quantity)} />
+        <Item label="Dose" value={formatDose(proposal.dose_per_hectare, productUnit)} />
+        <Item label="Total quantity" value={formatAmount(proposal.total_quantity, productUnit)} />
         <Item label="Spray date" value={proposal.spray_date} />
       </dl>
       <p className="text-sm text-stone-600">
@@ -37,7 +47,8 @@ export function PrescriptionCard({ prescription }: { prescription: IssuedPrescri
       </header>
       <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <Item label="Product" value={prescription.productName} />
-        <Item label="Dose" value={`${prescription.dosePerHectare} per ha`} />
+        <Item label="Dose" value={formatDose(prescription.dosePerHectare, prescription.unit)} />
+        <Item label="Total to spray" value={formatAmount(prescription.totalQuantity, prescription.unit)} />
         <Item label="Spray date" value={prescription.sprayDate} />
         <Item label="Do not harvest before" value={prescription.earliestSafeHarvestDate} />
         <Item label="Packs" value={String(prescription.packs)} />

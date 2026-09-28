@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Linq.Expressions;
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Common.Models;
@@ -29,6 +30,7 @@ public sealed class ReservationService(
     StockLedger ledger,
     ICurrentUserAccessor currentUser,
     TimeProvider timeProvider,
+    FarmCalendar calendar,
     ILogger<ReservationService> logger) : IReservationService
 {
     private const string RaceMessage = "Someone changed this stock at the same moment. Reload and try again.";
@@ -84,7 +86,7 @@ public sealed class ReservationService(
         if (!product.IsActive)
             throw new BusinessRuleException("PRODUCT_WITHDRAWN", $"{product.Name} has been withdrawn from sale and cannot be held.");
 
-        var today = DateOnly.FromDateTime(UtcNow);
+        var today = calendar.Today;
         var usableOn = request.UsableOn ?? today;
         if (usableOn < today)
             throw new RequestValidationException(nameof(request.UsableOn), "The date the stock is needed cannot be in the past.");

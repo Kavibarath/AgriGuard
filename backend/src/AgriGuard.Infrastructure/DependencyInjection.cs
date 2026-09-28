@@ -1,6 +1,7 @@
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
 using AgriGuard.Application.Cases;
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Inventory;
 using AgriGuard.Application.Registry;
 using AgriGuard.Application.Validation;
@@ -35,6 +36,10 @@ public static class DependencyInjection
         var seedDemoUsers = configuration.GetValue("Seed:DemoUsers", false);
 
         services.AddSingleton(TimeProvider.System);
+
+        // Calendar dates (spray, harvest, expiry) are the farms' local dates, not UTC ones.
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(configuration.GetValue("Calendar:TimeZone", FarmCalendar.DefaultTimeZone)!);
+        services.AddSingleton(sp => new FarmCalendar(sp.GetRequiredService<TimeProvider>(), zone));
 
         services.AddDbContext<AgriGuardDbContext>(options => options
             // No EnableRetryOnFailure: a retrying execution strategy forbids plain BeginTransaction(),

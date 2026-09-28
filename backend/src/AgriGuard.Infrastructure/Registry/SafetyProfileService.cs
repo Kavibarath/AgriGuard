@@ -1,3 +1,4 @@
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Registry;
@@ -14,7 +15,8 @@ namespace AgriGuard.Infrastructure.Registry;
 public sealed class SafetyProfileService(
     AgriGuardDbContext db,
     ICurrentUserAccessor currentUser,
-    TimeProvider timeProvider) : ISafetyProfileService
+    TimeProvider timeProvider,
+    FarmCalendar calendar) : ISafetyProfileService
 {
     public async Task<PlotSafetyProfileDto> GetAsync(Guid plotId, CancellationToken ct = default)
     {
@@ -38,7 +40,7 @@ public sealed class SafetyProfileService(
             ?? throw new NotFoundException("Plot", plotId);
 
         var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
-        var today = DateOnly.FromDateTime(nowUtc);
+        var today = calendar.Today;
 
         var cycle = await db.CropCycles.AsNoTracking()
             .Where(c => c.PlotId == plotId && c.Status == CropCycleStatus.Active)

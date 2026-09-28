@@ -30,12 +30,15 @@ class StubLlm:
     def __init__(self, responses: dict[type[BaseModel], Any] | None = None) -> None:
         self.responses: dict[type[BaseModel], Any] = responses or {}
         self.calls: list[str] = []
+        # (schema name, user prompt) for every call, so a test can check what the model was told.
+        self.prompts: list[tuple[str, str]] = []
         self.failures: dict[type[BaseModel], int] = {}
         self.unreachable = False
         self.model_name = "stub"
 
     async def generate(self, schema: type[BaseModel], system: str, user: str, on_repair: Any = None) -> Any:
         self.calls.append(schema.__name__)
+        self.prompts.append((schema.__name__, user))
         if self.unreachable:
             raise LlmError("The language model is unreachable: stub")
 

@@ -1,4 +1,5 @@
 using AgriGuard.Domain.Cases;
+using AgriGuard.Domain.Inventory;
 
 namespace AgriGuard.Application.Cases;
 
@@ -38,6 +39,8 @@ public sealed record IssuedPrescriptionDto(
     Guid Id,
     string PrescriptionNo,
     string ProductName,
+    // Litre or Kilogram: the dose is per hectare in this unit, the total quantity in it.
+    ProductUnit Unit,
     decimal DosePerHectare,
     decimal TotalQuantity,
     DateOnly SprayDate,

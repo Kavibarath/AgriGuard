@@ -139,6 +139,7 @@ export function makeRun(overrides: Partial<AgentRun> = {}): AgentRun {
       { sequenceNo: 4, agentRole: 'Validation', goal: 'Check the proposal against the safety rules', status: 'Succeeded', output: null, errorMessage: null, retryCount: 0, startedAt: null, completedAt: null, durationMs: 163 },
     ],
     proposedProductName: 'Azoxystrobin 25 SC',
+    proposedProductUnit: 'Litre',
     prescription: null,
     ...overrides,
   }
@@ -167,6 +168,7 @@ export function makeDecisionResult(overrides: Partial<DecisionResult> = {}): Dec
       id: 'rx-1',
       prescriptionNo: 'RX-2026-000001',
       productName: 'Azoxystrobin 25 SC',
+      unit: 'Litre',
       dosePerHectare: 0.6,
       totalQuantity: 0.48,
       sprayDate: '2026-09-26',

@@ -6,6 +6,7 @@ import { Field } from '@/components/ui/field'
 import { SelectField } from '@/components/ui/select'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { caseStatusTone, runStatusTone, severityTone } from '@/components/ui/status-tones'
+import { localDate } from './format'
 import { useCaseQueue } from './queries'
 import { caseStatusLabels, runStatusLabels, type CaseStatus, type CaseSummary } from './types'
 
@@ -101,7 +102,7 @@ export function AgentRunsPage() {
       sortable: true,
       numeric: true,
       secondary: true,
-      render: (c) => c.createdAt.slice(0, 10),
+      render: (c) => localDate(c.createdAt),
     },
   ]
 

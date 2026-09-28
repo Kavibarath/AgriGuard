@@ -204,7 +204,9 @@ def build_graph(deps: GraphDependencies) -> Any:
             f"Diagnosis: {state['diagnosis'].primary_pathogen_code} "
             f"({state['diagnosis'].reasoning})\n"
             f"Plot area: {case['areaHectares']} hectares.\n"
-            f"Today: {datetime.now(UTC).date().isoformat()}. "
+            # The farm's date from the backend, so the proposal and the validator agree on "today"
+            # (UTC is still yesterday in Sri Lanka before 05:30). Own clock only as a fallback.
+            f"Today: {safety.get('today') or datetime.now(UTC).date().isoformat()}. "
             f"Planned harvest: {safety.get('harvestDate')}\n"
             f"Approved products:\n{options}\n{guidance}",
         )

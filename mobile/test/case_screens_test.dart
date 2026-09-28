@@ -76,10 +76,12 @@ CaseDetail caseDetail({
 final prescription = Prescription(
   prescriptionNo: 'RX-2026-000002',
   productName: 'Mancozeb 80 WP',
+  unit: 'Kilogram',
   dosePerHectare: 2.0,
   totalQuantity: 1.6,
-  sprayDate: DateTime.utc(2026, 9, 27),
-  earliestSafeHarvestDate: DateTime.utc(2026, 10, 4),
+  // Plain dates arrive as "yyyy-MM-dd" and parse as local dates, never UTC ones.
+  sprayDate: DateTime(2026, 9, 27),
+  earliestSafeHarvestDate: DateTime(2026, 10, 4),
   instructions: 'Spray 2 kg/ha of Mancozeb 80 WP on 2026-09-27.',
   orderNo: 'ORD-2026-000002',
   dealerName: 'Kandy Agro Supplies',
@@ -324,6 +326,10 @@ void main() {
       expect(find.text('Do not harvest before 2026-10-04.'), findsOneWidget);
       expect(find.text('Mancozeb 80 WP'), findsOneWidget);
       expect(find.text('Kandy Agro Supplies'), findsOneWidget);
+      // Amounts carry their unit, and money its thousands separator.
+      expect(find.text('2 kg per hectare'), findsOneWidget);
+      expect(find.text('1.6 kg'), findsOneWidget);
+      expect(find.text('ORD-2026-000002 · 2 pack(s) · LKR 4,800'), findsOneWidget);
     });
 
     testWidgets('explains a rejected treatment with the agronomist’s reason', (tester) async {

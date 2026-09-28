@@ -12,7 +12,7 @@ public static class CaseFixtures
 {
     public static readonly string[] BlightSymptoms = ["leaf_brown_patches", "leaf_water_soaked_lesions"];
 
-    public static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    public static DateOnly Today => TestCalendar.Today;
 
     /// <summary>A farmer with 0.8 ha of flowering tomato, harvest in 50 days — the §11 demo plot.</summary>
     public sealed record FarmSetup(User Farmer, Guid DistrictId, Farm Farm, Plot Plot, CropCycle Cycle);

@@ -5,6 +5,7 @@ using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Common.Models;
 using AgriGuard.Domain.Cases;
+using AgriGuard.Domain.Inventory;
 using AgriGuard.Infrastructure.Agent;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Registry;
@@ -116,10 +117,12 @@ public sealed class AgentRunService(
 
         var proposal = AgentPayloads.ToElement(row!.ProposalJson);
         string? productName = null;
+        ProductUnit? productUnit = null;
         if (proposal is { ValueKind: JsonValueKind.Object } p
             && p.TryGetProperty("product_id", out var id) && id.ValueKind == JsonValueKind.String
-            && Guid.TryParse(id.GetString(), out var productId))
-            productName = await db.Products.Where(x => x.Id == productId).Select(x => x.Name).FirstOrDefaultAsync(ct);
+            && Guid.TryParse(id.GetString(), out var productId)
+            && await db.Products.Where(x => x.Id == productId).Select(x => new { x.Name, x.Unit }).FirstOrDefaultAsync(ct) is { } product)
+            (productName, productUnit) = (product.Name, product.Unit);
 
         return new AgentRunDto(
             row.Id,
@@ -140,6 +143,7 @@ public sealed class AgentRunService(
                 s.SequenceNo, s.AgentRole, s.Goal, s.Status, AgentPayloads.ToElement(s.OutputJson),
                 s.ErrorMessage, s.RetryCount, s.StartedAt, s.CompletedAt, s.DurationMs)).ToList(),
             productName,
+            productUnit,
             row.Status == AgentRunStatus.Completed ? await IssuedPrescriptions.ForRunAsync(db, row.Id, ct) : null);
     }
 

@@ -16,7 +16,7 @@ namespace AgriGuard.IntegrationTests;
 [Collection(ApiCollection.Name)]
 public sealed class PrescriptionValidationTests(AgriGuardApiFactory factory)
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => TestCalendar.Today;
 
     private async Task<(HttpClient Client, CropCycle Cycle, Plot Plot)> SetupAsync(
         string cropCode = "TOM",

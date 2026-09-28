@@ -14,6 +14,7 @@ internal static class IssuedPrescriptions
                 o.Prescription!.Id,
                 o.Prescription.PrescriptionNo,
                 o.Prescription.Product.Name,
+                o.Prescription.Product.Unit,
                 o.Prescription.DosePerHectare,
                 o.Prescription.TotalQuantity,
                 o.Prescription.SprayDate,

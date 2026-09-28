@@ -1,3 +1,4 @@
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Validation;
 using AgriGuard.Domain.Registry;
@@ -19,12 +20,13 @@ namespace AgriGuard.Infrastructure.Validation;
 public sealed class PrescriptionValidationService(
     AgriGuardDbContext db,
     TimeProvider timeProvider,
+    FarmCalendar calendar,
     ILogger<PrescriptionValidationService> logger) : IPrescriptionValidationService
 {
     public async Task<ValidationVerdictDto> ValidateAsync(ValidatePrescriptionRequest request, CancellationToken ct = default)
     {
         var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
-        var today = DateOnly.FromDateTime(nowUtc);
+        var today = calendar.Today;
 
         var cycle = await db.CropCycles.AsNoTracking()
             .Where(c => c.Id == request.CropCycleId)

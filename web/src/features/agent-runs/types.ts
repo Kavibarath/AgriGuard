@@ -1,3 +1,5 @@
+import type { ProductUnit } from '@/features/inventory/types'
+
 // Mirrors the API's case and agent-run DTOs. Enums arrive as names.
 //
 // Three payloads are stored as JSON by the backend and passed through unchanged, so they keep the
@@ -179,6 +181,8 @@ export interface IssuedPrescription {
   id: string
   prescriptionNo: string
   productName: string
+  /** The dose is per hectare in this unit; the total quantity is in it. */
+  unit: ProductUnit
   dosePerHectare: number
   totalQuantity: number
   sprayDate: string
@@ -208,6 +212,7 @@ export interface AgentRun {
   completedAt: string | null
   steps: AgentRunStep[]
   proposedProductName: string | null
+  proposedProductUnit: ProductUnit | null
   prescription: IssuedPrescription | null
 }
 

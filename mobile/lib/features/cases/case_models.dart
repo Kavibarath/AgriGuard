@@ -213,6 +213,7 @@ class Prescription {
   const Prescription({
     required this.prescriptionNo,
     required this.productName,
+    required this.unit,
     required this.dosePerHectare,
     required this.totalQuantity,
     required this.sprayDate,
@@ -227,6 +228,7 @@ class Prescription {
   factory Prescription.fromJson(Map<String, dynamic> json) => Prescription(
         prescriptionNo: json['prescriptionNo'] as String,
         productName: json['productName'] as String,
+        unit: json['unit'] as String?,
         dosePerHectare: (json['dosePerHectare'] as num).toDouble(),
         totalQuantity: (json['totalQuantity'] as num).toDouble(),
         sprayDate: DateTime.parse(json['sprayDate'] as String),
@@ -240,6 +242,9 @@ class Prescription {
 
   final String prescriptionNo;
   final String productName;
+
+  /// "Litre" or "Kilogram": the dose is per hectare in it, the total is in it. Null from an older API.
+  final String? unit;
   final double dosePerHectare;
   final double totalQuantity;
   final DateTime sprayDate;
@@ -249,6 +254,13 @@ class Prescription {
   final String dealerName;
   final int packs;
   final double orderTotal;
+
+  /// "L" or "kg" for display; empty while the unit is unknown.
+  String get unitSymbol => switch (unit) {
+        'Litre' => 'L',
+        'Kilogram' => 'kg',
+        _ => '',
+      };
 }
 
 /// What the farmer sends to report a problem.

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AgriGuard.Application.Common.Models;
 using AgriGuard.Domain.Cases;
+using AgriGuard.Domain.Inventory;
 using AgriGuard.Domain.Registry;
 
 namespace AgriGuard.Application.Cases;
@@ -97,6 +98,8 @@ public sealed record AgentRunDto(
     IReadOnlyList<AgentRunStepDto> Steps,
     // The stored proposal carries only the product's id; its name is resolved for display.
     string? ProposedProductName,
+    // Litre or Kilogram: the dose is per hectare in this unit, the total quantity in it.
+    ProductUnit? ProposedProductUnit,
     // Set once the run was approved.
     IssuedPrescriptionDto? Prescription);
 
