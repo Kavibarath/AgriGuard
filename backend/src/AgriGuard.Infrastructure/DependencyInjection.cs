@@ -2,12 +2,14 @@ using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
 using AgriGuard.Application.Cases;
 using AgriGuard.Application.Common;
+using AgriGuard.Application.Harvest;
 using AgriGuard.Application.Inventory;
 using AgriGuard.Application.Registry;
 using AgriGuard.Application.Validation;
 using AgriGuard.Application.Weather;
 using AgriGuard.Infrastructure.Agent;
 using AgriGuard.Infrastructure.Cases;
+using AgriGuard.Infrastructure.Harvest;
 using AgriGuard.Infrastructure.Identity;
 using AgriGuard.Infrastructure.Inventory;
 using AgriGuard.Infrastructure.Persistence;
@@ -147,6 +149,11 @@ public static class DependencyInjection
         services.AddScoped<IWeatherService, WeatherService>();
         services.AddScoped<ISprayWindowService, SprayWindowService>();
 
+        // Component D — harvest windows, forecasts and collection logistics
+        services.AddScoped<IHarvestWindowService, HarvestWindowService>();
+        services.AddScoped<IHarvestForecastService, HarvestForecastService>();
+        services.AddScoped<ICollectionService, CollectionService>();
+
         services.AddOptions<InventoryOptions>().Bind(configuration.GetSection(InventoryOptions.SectionName));
         // Registered as itself too, so tests can run one sweep on demand.
         services.AddSingleton<ReservationExpirySweeper>();
@@ -164,6 +171,7 @@ public static class DependencyInjection
             await DemoUserSeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), ct);
             await DemoInventorySeeder.SeedAsync(db, TimeProvider.System, ct);
             await DemoDryZoneSeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), TimeProvider.System, ct);
+            await DemoCollectionSeeder.SeedAsync(db, TimeProvider.System, ct);
         }
     }
 }

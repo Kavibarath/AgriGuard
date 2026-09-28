@@ -39,7 +39,7 @@ class HomeScreen extends ConsumerWidget {
             const _FeatureTile(icon: Icons.add_a_photo_outlined, title: 'Report a crop problem', subtitle: 'Symptoms and location', route: '/cases/new'),
             const _FeatureTile(icon: Icons.receipt_long, title: 'My crop problems', subtitle: 'AI advice, review and prescriptions', route: '/cases'),
             const _FeatureTile(icon: Icons.landscape, title: 'My farms & plots', subtitle: 'Register plots and track crop cycles'),
-            const _FeatureTile(icon: Icons.local_shipping, title: 'Harvest collection', subtitle: 'Book a slot at a collection centre'),
+            const _FeatureTile(icon: Icons.local_shipping, title: 'Harvest collection', subtitle: 'Best harvest days, spray weather, book a slot', route: '/harvest'),
           ] else if (user.role == UserRole.fieldAgronomist) ...[
             const _FeatureTile(icon: Icons.fact_check, title: 'Cases in my district', subtitle: 'Field triage and follow-up', route: '/cases'),
           ] else
