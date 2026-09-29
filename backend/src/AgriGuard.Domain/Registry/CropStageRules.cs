@@ -74,6 +74,12 @@ public static class CropStageRules
     /// <paramref name="reachedOn"/>. Returns the unchanged baseline for Sown (no progress yet)
     /// and for Harvested (the date is now history, not a forecast).
     /// </summary>
+    /// <summary>
+    /// However early a stage is reached, the season is not assumed to be shorter than this share
+    /// of the crop's maturity period.
+    /// </summary>
+    public const double MinimumScale = 0.75;
+
     public static DateOnly ReviseExpectedHarvestDate(
         DateOnly sownDate,
         int cropMaturityDays,
@@ -91,11 +97,14 @@ public static class CropStageRules
         var scale = actualDaysToHere / expectedDaysToHere;
         var revisedTotal = (int)Math.Round(cropMaturityDays * scale, MidpointRounding.AwayFromZero);
 
-        // Never predict a harvest before the stage was even reached, and never let a wild
+        // Never predict a harvest before the stage was even reached, never pull it forward by more
+        // than a quarter of the season (a stage recorded on the day of sowing would otherwise
+        // scale the whole cycle to zero and put the harvest "tomorrow"), and never let a wild
         // outlier (a mis-dated transition) push the estimate years out. The lower bound wins
         // when the two conflict: a stage recorded beyond twice the maturity period is already
         // nonsense, and "the day after it was reached" is the only defensible answer left.
-        var lowerBound = Math.Max(reachedOn.DayNumber - sownDate.DayNumber + 1, 1);
+        var earliest = (int)Math.Ceiling(cropMaturityDays * MinimumScale);
+        var lowerBound = Math.Max(Math.Max(reachedOn.DayNumber - sownDate.DayNumber + 1, 1), earliest);
         var upperBound = Math.Max(cropMaturityDays * 2, lowerBound);
         revisedTotal = Math.Clamp(revisedTotal, lowerBound, upperBound);
 

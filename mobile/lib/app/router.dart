@@ -10,6 +10,9 @@ import '../features/cases/cases_screen.dart';
 import '../features/cases/new_case_screen.dart';
 import '../features/harvest/harvest_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/registry/farms_screen.dart';
+import '../features/registry/new_plot_screen.dart';
+import '../features/registry/plot_screen.dart';
 
 /// Bridges Riverpod → go_router: any auth change re-evaluates `redirect`.
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -42,6 +45,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/harvest', builder: (_, _) => const HarvestScreen()),
+      GoRoute(
+        path: '/farms',
+        builder: (_, _) => const FarmsScreen(),
+        routes: [
+          GoRoute(
+            path: ':farmId',
+            builder: (_, state) => FarmScreen(farmId: state.pathParameters['farmId']!),
+            routes: [
+              GoRoute(path: 'plots/new', builder: (_, state) => NewPlotScreen(farmId: state.pathParameters['farmId']!)),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(path: '/plots/:plotId', builder: (_, state) => PlotScreen(plotId: state.pathParameters['plotId']!)),
       GoRoute(
         path: '/cases',
         builder: (_, _) => const CasesScreen(),
