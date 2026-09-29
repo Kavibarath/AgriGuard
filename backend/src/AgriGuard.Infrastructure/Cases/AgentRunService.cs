@@ -146,10 +146,8 @@ public sealed class AgentRunService(
             productName,
             productUnit,
             row.Status == AgentRunStatus.Completed ? await IssuedPrescriptions.ForRunAsync(db, row.Id, ct) : null,
-            finalOutcome is { ValueKind: JsonValueKind.Object } outcome
-            && outcome.TryGetProperty("safety_review", out var review) && review.ValueKind == JsonValueKind.Object
-                ? review
-                : null);
+            Nested(finalOutcome, "safety_review"),
+            Nested(finalOutcome, "triage"));
     }
 
     public async Task<PagedResult<AgentRunEventDto>> ListEventsAsync(Guid runId, AgentRunEventQuery query, CancellationToken ct = default)
@@ -171,4 +169,10 @@ public sealed class AgentRunService(
                 e.DurationMs, e.OccurredAt, e.CorrelationId)).ToList(),
             page.Page, page.PageSize, page.TotalCount);
     }
+
+    /// <summary>An object inside the stored result, or null when absent (runs reported before it existed).</summary>
+    private static JsonElement? Nested(JsonElement? outcome, string property) =>
+        outcome is { ValueKind: JsonValueKind.Object } o && o.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object
+            ? value
+            : null;
 }

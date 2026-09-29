@@ -256,7 +256,75 @@ public sealed class InternalAgentApiTests(AgriGuardApiFactory factory)
         Assert.Equal(JsonValueKind.Null, none.GetProperty("maxDosePerHectare").ValueKind);
     }
 
+    [Fact]
+    public async Task The_pathogen_profile_says_whether_any_approved_product_can_treat_it()
+    {
+        var tomato = await factory.CropIdAsync("TOM");
+        var agent = factory.AgentClient();
+
+        var blight = await agent.GetFromJsonAsync<JsonElement>($"/internal/tools/pathogen-profile?pathogenCode=late_blight&cropId={tomato}");
+        var wilt = await agent.GetFromJsonAsync<JsonElement>($"/internal/tools/pathogen-profile?pathogenCode=BACTERIAL_WILT&cropId={tomato}");
+        var unknown = await agent.GetFromJsonAsync<JsonElement>($"/internal/tools/pathogen-profile?pathogenCode=MADE_UP&cropId={tomato}");
+
+        Assert.True(blight.GetProperty("chemicalControl").GetBoolean());
+        Assert.True(blight.GetProperty("approvedProducts").GetInt32() >= 3);
+        Assert.Equal("FungalDisease", blight.GetProperty("type").GetString());
+        // No product in the catalogue targets bacterial wilt: nothing can be prescribed.
+        Assert.False(wilt.GetProperty("chemicalControl").GetBoolean());
+        Assert.Equal("BacterialDisease", wilt.GetProperty("type").GetString());
+        Assert.False(unknown.GetProperty("known").GetBoolean());
+    }
+
     // ── Callbacks ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_coordinator_s_return_after_diagnosis_shows_as_triaging()
+    {
+        var (_, farmer, _, runId) = await RunInFlightAsync();
+        var agent = factory.AgentClient();
+
+        await Post(agent, runId, new { eventType = "StepStarted", agentRole = "Coordinator", sequenceNo = 1, goal = "Plan the run" });
+        await Post(agent, runId, new { eventType = "StepStarted", agentRole = "Coordinator", sequenceNo = 3, goal = "Decide whether to treat" });
+
+        Assert.Equal("Triaging", (await farmer.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{runId}")).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task A_case_the_coordinator_hands_to_an_agronomist_is_escalated_with_advice_for_the_farmer()
+    {
+        var (_, farmer, caseId, runId) = await RunInFlightAsync();
+        var agent = factory.AgentClient();
+        await Post(agent, runId, new { eventType = "TriageDecided", agentRole = "Coordinator", payload = new { route = "AGRONOMIST", decided_by = "rules" } });
+
+        var response = await agent.PostAsJsonAsync($"/internal/agent-runs/{runId}/result", new
+        {
+            run_id = runId,
+            outcome = "ManualReview",
+            failure_reason = "No approved product controls Bacterial wilt on Tomato.",
+            revisions = 0,
+            triage = new
+            {
+                route = "AGRONOMIST",
+                reason = "No approved product controls Bacterial wilt on Tomato.",
+                decided_by = "rules",
+                farmer_advice = new[] { "Pull out wilted plants and burn them away from the field.", "Do not replant tomato in this bed this season." }
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var run = await farmer.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{runId}");
+        Assert.Equal("Escalated", run.GetProperty("status").GetString());
+        Assert.Equal("rules", run.GetProperty("triage").GetProperty("decided_by").GetString());
+
+        var detail = await farmer.GetFromJsonAsync<JsonElement>($"/api/cases/{caseId}");
+        Assert.Equal("AwaitingManualReview", detail.GetProperty("status").GetString());
+        var latest = detail.GetProperty("agentRuns")[0];
+        Assert.Equal("Pull out wilted plants and burn them away from the field.\nDo not replant tomato in this bed this season.",
+            latest.GetProperty("farmerAdvice").GetString());
+
+        // A hand-off ends the run, so the farmer (or an agronomist) can ask again later.
+        Assert.Equal(HttpStatusCode.Accepted, (await farmer.PostAsync($"/api/cases/{caseId}/agent-runs", null)).StatusCode);
+    }
 
     [Fact]
     public async Task The_validation_agent_s_review_is_recorded_and_shown_with_the_run()

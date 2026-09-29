@@ -53,7 +53,9 @@ public sealed record AgentRunResultRequest(
     [property: JsonPropertyName("failure_reason")] string? FailureReason,
     [property: JsonPropertyName("revisions")] int Revisions,
     // The Validation agent's explanation of the verdict, when its review passed the consistency check.
-    [property: JsonPropertyName("safety_review")] JsonElement? SafetyReview = null);
+    [property: JsonPropertyName("safety_review")] JsonElement? SafetyReview = null,
+    // The Coordinator's triage decision: route, reason, who decided, and advice for the farmer.
+    [property: JsonPropertyName("triage")] JsonElement? Triage = null);
 
 /// <summary>Where agent progress lands. The agent service holds no database access; this is its only write path.</summary>
 public interface IAgentCallbackService
@@ -130,6 +132,22 @@ public sealed record RuleLimitsTool(
     int? MaxApplicationsPerCycle,
     int? MinDaysBetweenApplications,
     int? RainfastHours);
+
+/// <summary>
+/// get_pathogen_profile: what the Coordinator needs to triage a diagnosis. <c>ChemicalControl</c>
+/// is false when no active, unrestricted product approved for the crop targets the pathogen (a
+/// bacterial wilt or a virus, say), and then no prescription can be written at all.
+/// </summary>
+public sealed record PathogenProfileTool(
+    string Code,
+    string CommonName,
+    string Type,
+    Guid CropId,
+    string CropName,
+    bool ChemicalControl,
+    int ApprovedProducts,
+    // Only for pathogens outside the catalogue, so the Coordinator can say so rather than guess.
+    bool Known);
 
 public sealed record ConfirmedPathogenCountTool(string Code, string CommonName, int Cases, int SharePercent);
 
@@ -232,4 +250,5 @@ public interface IAgentToolService
     Task<ProductPricingTool> GetProductPricingAsync(Guid productId, decimal? quantity, CancellationToken ct = default);
     Task<AgentVerdictTool> ValidatePrescriptionAsync(AgentProposalInput proposal, CancellationToken ct = default);
     Task<RuleLimitsTool> GetRuleLimitsAsync(Guid productId, Guid cropId, CancellationToken ct = default);
+    Task<PathogenProfileTool> GetPathogenProfileAsync(string pathogenCode, Guid cropId, CancellationToken ct = default);
 }

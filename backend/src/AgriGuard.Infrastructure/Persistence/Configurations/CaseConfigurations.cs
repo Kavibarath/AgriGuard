@@ -63,6 +63,7 @@ internal sealed class AgentRunConfiguration : IEntityTypeConfiguration<AgentRun>
     {
         b.Property(x => x.Objective).HasMaxLength(1000);
         b.Property(x => x.FailureReason).HasMaxLength(1000);
+        b.Property(x => x.FarmerAdvice).HasMaxLength(2000);
         b.Property(x => x.PlanJson).HasColumnType("jsonb");
         b.Property(x => x.ProposalJson).HasColumnType("jsonb");
         b.Property(x => x.VerdictJson).HasColumnType("jsonb");

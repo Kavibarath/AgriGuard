@@ -121,17 +121,28 @@ class CaseSummary {
 }
 
 class RunSummary {
-  const RunSummary({required this.id, required this.status, this.failureReason});
+  const RunSummary({required this.id, required this.status, this.failureReason, this.advice = const []});
 
   factory RunSummary.fromJson(Map<String, dynamic> json) => RunSummary(
         id: json['id'] as String,
         status: json['status'] as String,
         failureReason: json['failureReason'] as String?,
+        advice: ((json['farmerAdvice'] as String?) ?? '')
+            .split('\n')
+            .map((tip) => tip.trim())
+            .where((tip) => tip.isNotEmpty)
+            .toList(),
       );
 
   final String id;
   final String status;
   final String? failureReason;
+
+  /// The Coordinator's non-chemical tips (never a product or a dose).
+  final List<String> advice;
+
+  /// The Coordinator handed the case to an agronomist on purpose.
+  bool get escalated => status == 'Escalated';
 }
 
 /// A leaf photo's metadata; the image is fetched separately, with the signed-in token.

@@ -10,6 +10,8 @@ public enum AgentRunStatus
 {
     Planning,
     Diagnosing,
+    // The Coordinator deciding whether the diagnosis can be treated by a product at all.
+    Triaging,
     Drafting,
     Validating,
     RevisionRequested,
@@ -19,7 +21,10 @@ public enum AgentRunStatus
     Completed,
     Rejected,
     Failed,
-    TimedOut
+    TimedOut,
+    // The Coordinator handed the case to an agronomist on purpose (no chemical control, or an
+    // uncertain diagnosis). Not a failure: the workflow did what it should.
+    Escalated
 }
 
 public enum AgentRole { Coordinator, Diagnosis, Action, Validation }
@@ -46,7 +51,9 @@ public enum AgentEventType
     StockHeld,
     StockReleased,
     // The Validation agent's reading of the verdict: accepted, or discarded with the reason.
-    SafetyReviewed
+    SafetyReviewed,
+    // The Coordinator's triage: treat with a product, or hand to an agronomist, and why.
+    TriageDecided
 }
 
 public enum ApprovalDecisionType { Approve, Reject, Revise }
@@ -73,6 +80,13 @@ public class AgentRun : AuditableEntity
 
     public string? FailureReason { get; set; }
 
+    /// <summary>
+    /// The Coordinator's non-chemical advice for the farmer (one tip per line), shown on the phone
+    /// while an agronomist looks at the case. Never a product or a dose: those only come from an
+    /// approved prescription.
+    /// </summary>
+    public string? FarmerAdvice { get; set; }
+
     /// <summary>Action → Validation loops performed; capped at 2 before safe failure.</summary>
     public int RevisionCount { get; set; }
 
@@ -87,7 +101,7 @@ public class AgentRun : AuditableEntity
     public ICollection<ApprovalDecision> Decisions { get; set; } = new List<ApprovalDecision>();
 
     public bool IsTerminal => Status is AgentRunStatus.Completed or AgentRunStatus.Rejected
-        or AgentRunStatus.Failed or AgentRunStatus.TimedOut;
+        or AgentRunStatus.Failed or AgentRunStatus.TimedOut or AgentRunStatus.Escalated;
 }
 
 public class AgentRunStep : Entity

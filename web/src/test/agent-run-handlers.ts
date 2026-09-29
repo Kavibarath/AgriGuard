@@ -141,6 +141,12 @@ export function makeRun(overrides: Partial<AgentRun> = {}): AgentRun {
     proposedProductName: 'Azoxystrobin 25 SC',
     proposedProductUnit: 'Litre',
     prescription: null,
+    triage: {
+      route: 'TREAT',
+      reason: 'Late blight is treatable with an approved fungicide.',
+      decided_by: 'coordinator',
+      farmer_advice: ['Remove and burn the worst leaves.', 'Water at the base of the plants, not over the leaves.'],
+    },
     safetyReview: {
       decision: 'PASS',
       explanation: '2 kg/ha is inside the 1.5–2.5 kg/ha range, and harvest is well after the 7-day interval.',

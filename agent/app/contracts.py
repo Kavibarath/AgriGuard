@@ -8,9 +8,10 @@ fails here — loudly and early — rather than leaking malformed data into a pr
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -28,6 +29,8 @@ class RunOutcome(StrEnum):
     PENDING_APPROVAL = "PendingApproval"
     REJECTED = "Rejected"
     FAILED = "Failed"
+    # The Coordinator handed the case to an agronomist on purpose: not a failure.
+    MANUAL_REVIEW = "ManualReview"
 
 
 class StrictModel(BaseModel):
@@ -46,6 +49,47 @@ class PlanStep(StrictModel):
 
 class Plan(StrictModel):
     steps: list[PlanStep] = Field(min_length=1, max_length=10)
+
+
+class TriageRoute(StrEnum):
+    TREAT = "TREAT"
+    AGRONOMIST = "AGRONOMIST"
+
+
+class Triage(StrictModel):
+    """
+    The Coordinator's second output, after the diagnosis: can a product treat this, and what can
+    the farmer do meanwhile?
+    """
+
+    route: TriageRoute
+    reason: ShortText
+    # Non-chemical steps only: sanitation, spacing, watering, removing infected plants.
+    farmer_advice: list[ShortText] = Field(min_length=1, max_length=4)
+
+
+# Words and amounts that belong in a prescription, not in general advice. A tip that contains any
+# of them is dropped: the only chemical advice a farmer gets is a validated, approved prescription.
+_CHEMICAL_ADVICE = re.compile(
+    r"(fungicide|insecticide|pesticide|herbicide|bactericide|miticide|acaricide|\bspray|"
+    r"\b\d+(\.\d+)?\s*(ml|l|g|kg|litres?|liters?|grams?)\b)",
+    re.IGNORECASE,
+)
+
+
+def is_safe_advice(tip: str) -> bool:
+    return _CHEMICAL_ADVICE.search(tip) is None
+
+
+class TriageDecision(StrictModel):
+    """What the run actually does after triage, and who decided it (§9.2 "decide terminal outcome")."""
+
+    route: TriageRoute
+    reason: ShortText
+    # "rules" when a hard stop decided (no approved product, weak diagnosis);
+    # "coordinator" when the model did.
+    decided_by: Literal["rules", "coordinator"]
+    farmer_advice: list[ShortText] = Field(default_factory=list, max_length=4)
 
 
 # ── Diagnosis ───────────────────────────────────────────────────────────────
@@ -196,3 +240,5 @@ class RunResult(StrictModel):
     revisions: int = 0
     # The Validation agent's review of the final verdict, when it passed the consistency check.
     safety_review: SafetyReview | None = None
+    # The Coordinator's triage after the diagnosis; None when the run ended before it.
+    triage: TriageDecision | None = None

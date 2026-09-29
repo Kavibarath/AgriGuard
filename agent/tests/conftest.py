@@ -20,6 +20,8 @@ from app.contracts import (
     ReviewDecision,
     RuleFix,
     SafetyReview,
+    Triage,
+    TriageRoute,
 )
 from app.llm import LlmError
 from app.tools import ToolClient
@@ -149,6 +151,15 @@ DEFAULT_TOOL_RESPONSES: dict[str, Any] = {
         "recentHumidityPercent": 88,
         "days": [{"date": "2026-09-29", "suitable": True}, {"date": "2026-09-30", "suitable": False}],
     },
+    "get_pathogen_profile": {
+        "code": "LATE_BLIGHT",
+        "commonName": "Late blight",
+        "type": "FungalDisease",
+        "cropName": "Tomato",
+        "chemicalControl": True,
+        "approvedProducts": 4,
+        "known": True,
+    },
     "get_rule_limits": {
         "productName": "Mancozeb 80 WP",
         "cropName": "Tomato",
@@ -269,7 +280,25 @@ def consistent_review(user: str) -> SafetyReview:
 
 
 @pytest.fixture
-def llm(plan: Plan, diagnosis: Diagnosis, proposal: PrescriptionProposal) -> StubLlm:
+def triage() -> Triage:
+    return Triage(
+        route=TriageRoute.TREAT,
+        reason="Late blight is treatable with an approved fungicide.",
+        farmer_advice=[
+            "Remove and burn the worst leaves.",
+            "Water at the base of the plants, not over the leaves.",
+        ],
+    )
+
+
+@pytest.fixture
+def llm(plan: Plan, diagnosis: Diagnosis, proposal: PrescriptionProposal, triage: Triage) -> StubLlm:
     return StubLlm(
-        {Plan: plan, Diagnosis: diagnosis, PrescriptionProposal: proposal, SafetyReview: consistent_review}
+        {
+            Plan: plan,
+            Diagnosis: diagnosis,
+            Triage: triage,
+            PrescriptionProposal: proposal,
+            SafetyReview: consistent_review,
+        }
     )

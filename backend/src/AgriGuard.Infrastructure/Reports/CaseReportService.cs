@@ -57,7 +57,9 @@ public sealed class CaseReportService(AgriGuardDbContext db, ICurrentUserAccesso
         var prescribed = hours.Count;
 
         var runs = rows.SelectMany(r => r.Runs).ToList();
-        var finished = runs.Count(s => s is AgentRunStatus.Completed or AgentRunStatus.Rejected or AgentRunStatus.Failed or AgentRunStatus.TimedOut);
+        // A deliberate hand-off to an agronomist is a finished run, just not a prescription.
+        var finished = runs.Count(s => s is AgentRunStatus.Completed or AgentRunStatus.Rejected or AgentRunStatus.Failed
+            or AgentRunStatus.TimedOut or AgentRunStatus.Escalated);
 
         var daily = Enumerable.Range(0, to.DayNumber - from.DayNumber + 1)
             .Select(i => from.AddDays(i))

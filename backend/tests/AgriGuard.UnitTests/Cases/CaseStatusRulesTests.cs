@@ -53,4 +53,13 @@ public sealed class CaseStatusRulesTests
     [InlineData(CaseStatus.Closed, false)]
     public void A_run_starts_only_on_a_new_case_or_one_back_from_review(CaseStatus status, bool allowed) =>
         Assert.Equal(allowed, CaseStatusRules.CanStartAgentRun(status));
+
+    [Fact]
+    public void A_hand_off_to_an_agronomist_ends_the_run_and_triage_is_agent_work()
+    {
+        Assert.Contains(AgentRunStatus.Escalated, CaseStatusRules.TerminalRunStatuses);
+        Assert.DoesNotContain(AgentRunStatus.Escalated, CaseStatusRules.AgentActiveRunStatuses);
+        Assert.Contains(AgentRunStatus.Triaging, CaseStatusRules.AgentActiveRunStatuses);
+        Assert.True(new AgentRun { Status = AgentRunStatus.Escalated }.IsTerminal);
+    }
 }

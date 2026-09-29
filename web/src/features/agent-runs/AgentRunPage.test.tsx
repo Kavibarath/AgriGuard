@@ -61,6 +61,47 @@ describe('AgentRunPage', () => {
     expect(screen.getByText(/instruction-like text in the note/i)).toBeInTheDocument()
   })
 
+  it('shows the Coordinator’s triage and the advice sent to the farmer', async () => {
+    signIn()
+    renderApp(`/agent-runs/${RUN_ID}`)
+
+    const triage = await screen.findByRole('region', { name: 'Triage' })
+    expect(within(triage).getByText('Treat with a product')).toBeInTheDocument()
+    expect(within(triage).getByText('Decided by the Coordinator agent.')).toBeInTheDocument()
+    expect(within(triage).getByText('Remove and burn the worst leaves.')).toBeInTheDocument()
+  })
+
+  it('explains a case handed to an agronomist by a safety rule, with no treatment drafted', async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/api/agent-runs/:id`, () =>
+        HttpResponse.json(
+          makeRun({
+            status: 'Escalated',
+            failureReason: 'No approved product controls Bacterial wilt on Tomato, so nothing can be prescribed.',
+            proposal: null,
+            verdict: null,
+            safetyReview: null,
+            triage: {
+              route: 'AGRONOMIST',
+              reason: 'No approved product controls Bacterial wilt on Tomato, so nothing can be prescribed.',
+              decided_by: 'rules',
+              farmer_advice: ['Pull out wilted plants and burn them away from the field.'],
+            },
+          }),
+        ),
+      ),
+    )
+    signIn()
+    renderApp(`/agent-runs/${RUN_ID}`)
+
+    expect(await screen.findByText('Handed to an agronomist', { selector: 'p' })).toBeInTheDocument()
+    const triage = screen.getByRole('region', { name: 'Triage' })
+    expect(within(triage).getByText('Decided by a safety rule, not the model.')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Proposed treatment' })).not.toBeInTheDocument()
+    // Not treated as a failure: no "run failed" alert.
+    expect(screen.queryByText(/Run failed/)).not.toBeInTheDocument()
+  })
+
   it('shows the Validation agent’s reading under the rules, marked as unable to change them', async () => {
     signIn()
     renderApp(`/agent-runs/${RUN_ID}`)

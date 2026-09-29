@@ -77,7 +77,9 @@ public sealed record AgentRunSummaryDto(
     int RevisionCount,
     string? FailureReason,
     DateTime CreatedAt,
-    DateTime? CompletedAt);
+    DateTime? CompletedAt,
+    // The Coordinator's non-chemical tips for the farmer, one per line; null when it gave none.
+    string? FarmerAdvice);
 
 public sealed record AgentRunDto(
     Guid Id,
@@ -104,7 +106,9 @@ public sealed record AgentRunDto(
     IssuedPrescriptionDto? Prescription,
     // The Validation agent's plain-language review of the final verdict (agent/app/contracts.py
     // SafetyReview), when it passed the consistency check. It explains; it never decides.
-    JsonElement? SafetyReview);
+    JsonElement? SafetyReview,
+    // The Coordinator's triage (route, reason, decided_by, farmer_advice), once the run has reported.
+    JsonElement? Triage);
 
 public sealed record AgentRunStepDto(
     int SequenceNo,

@@ -20,6 +20,7 @@ export const plotStatusTone: Record<string, Tone> = {
 export const runStatusTone: Record<string, Tone> = {
   Planning: 'active',
   Diagnosing: 'active',
+  Triaging: 'active',
   Drafting: 'active',
   Validating: 'active',
   RevisionRequested: 'active',
@@ -30,6 +31,8 @@ export const runStatusTone: Record<string, Tone> = {
   Rejected: 'danger',
   Failed: 'danger',
   TimedOut: 'danger',
+  // A deliberate hand-off, not a failure: it needs a person, so it is flagged but not red.
+  Escalated: 'warning',
 }
 
 export const caseStatusTone: Record<string, Tone> = {

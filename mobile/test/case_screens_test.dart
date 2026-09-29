@@ -377,6 +377,37 @@ void main() {
       expect(find.bySemanticsLabel(RegExp('Photo 2')), findsOneWidget);
     });
 
+    testWidgets('explains a case the AI handed to an agronomist, with what to do meanwhile', (tester) async {
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail(
+            status: CaseStatus.awaitingManualReview,
+            runs: [
+              RunSummary.fromJson({
+                'id': 'run-1',
+                'status': 'Escalated',
+                'failureReason': 'No approved product controls Bacterial wilt on Tomato, so nothing can be prescribed.',
+                'farmerAdvice': 'Pull out wilted plants and burn them away from the field.\nDo not replant tomato in this bed this season.',
+              }),
+            ],
+          ));
+      await openApp(tester, '/cases/case-1');
+
+      expect(find.textContaining('The AI thinks an agronomist should look at this first.'), findsOneWidget);
+      expect(find.textContaining('Bacterial wilt'), findsOneWidget);
+      expect(find.text('What you can do now'), findsOneWidget);
+      expect(find.text('Pull out wilted plants and burn them away from the field.'), findsOneWidget);
+      expect(find.text('Do not replant tomato in this bed this season.'), findsOneWidget);
+    });
+
+    testWidgets('shows the care tips while a treatment awaits the agronomist', (tester) async {
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail(
+            status: CaseStatus.pendingApproval,
+            runs: [const RunSummary(id: 'run-1', status: 'PendingApproval', advice: ['Remove and burn the worst leaves.'])],
+          ));
+      await openApp(tester, '/cases/case-1');
+
+      expect(find.text('Remove and burn the worst leaves.'), findsOneWidget);
+    });
+
     testWidgets('offers to try again when the AI could not finish', (tester) async {
       when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail(
             status: CaseStatus.awaitingManualReview,

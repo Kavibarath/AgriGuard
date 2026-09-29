@@ -13,6 +13,7 @@ import { PrescriptionCard, ProposalCard } from './ProposalCard'
 import { useCase, useRun, useRunEvents } from './queries'
 import { RunSteps } from './RunSteps'
 import { RunTimeline } from './RunTimeline'
+import { TriageCard } from './TriageCard'
 import { VerdictCard } from './VerdictCard'
 import { caseStatusLabels, runStatusLabels, workingStatuses, type CaseDetail } from './types'
 
@@ -55,6 +56,12 @@ export function AgentRunPage() {
               </div>
             </header>
 
+            {run.data.status === 'Escalated' && (
+              <Alert tone="warning" title="Handed to an agronomist">
+                {run.data.failureReason} The case is in the manual review queue; no treatment was drafted.
+              </Alert>
+            )}
+
             {ended && run.data.failureReason && (
               <Alert tone={run.data.status === 'Rejected' ? 'warning' : 'error'} title={`Run ${runStatusLabels[run.data.status].toLowerCase()}`}>
                 {run.data.failureReason} The case has gone to manual review.
@@ -68,6 +75,7 @@ export function AgentRunPage() {
                 {run.data.status === 'PendingApproval' && (
                   <DecisionPanel run={run.data} canDecide={can(user?.role, 'CanApprovePrescriptions')} />
                 )}
+                {run.data.triage && <TriageCard triage={run.data.triage} />}
                 {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
                 {run.data.verdict && <VerdictCard verdict={run.data.verdict} review={run.data.safetyReview} />}
               </div>

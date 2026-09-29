@@ -191,7 +191,7 @@ public sealed class CaseService(
         c.UpdatedAt,
         c.AgentRuns
             .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new AgentRunSummaryDto(r.Id, r.Status, r.RevisionCount, r.FailureReason, r.CreatedAt, r.CompletedAt))
+            .Select(r => new AgentRunSummaryDto(r.Id, r.Status, r.RevisionCount, r.FailureReason, r.CreatedAt, r.CompletedAt, r.FarmerAdvice))
             .ToList(),
         // Metadata only: the image bytes stay in the database until someone opens the photo.
         c.Attachments
