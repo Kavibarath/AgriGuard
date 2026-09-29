@@ -53,6 +53,14 @@ export const useRunEvents = (id: string, status: AgentRun['status'] | undefined)
     refetchInterval: status !== undefined && workingStatuses.includes(status) ? POLL_INTERVAL_MS : false,
   })
 
+export const useUpdateCaseStatus = (caseId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (status: 'Closed' | 'AwaitingManualReview') => agentRuns.updateCaseStatus(caseId, status),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: agentRunKeys.all }),
+  })
+}
+
 export const useDecide = (runId: string) => {
   const queryClient = useQueryClient()
   return useMutation({

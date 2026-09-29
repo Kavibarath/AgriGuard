@@ -90,6 +90,9 @@ export interface CaseSummary {
   updatedAt: string
   latestRunId: string | null
   latestRunStatus: AgentRunStatus | null
+  /** Where the phone was: the queue is drawn on a map from these. */
+  reportedLatitude: number
+  reportedLongitude: number
 }
 
 export interface CaseDetail {
@@ -108,8 +111,30 @@ export interface CaseDetail {
   farmerNote: string | null
   reportedLatitude: number
   reportedLongitude: number
+  plotId: string
+  /** The plot's registered centre; a report made far from it stands out on the map. */
+  plotLatitude: number
+  plotLongitude: number
+  /** When the farmer made the report, if it waited on the phone before reaching the server. */
+  capturedAt: string | null
+  assignedAgronomistName: string | null
+  confirmedPathogenCode: string | null
   createdAt: string
+  updatedAt: string
+  agentRuns: CaseRunSummary[]
   photos: CasePhoto[]
+}
+
+/** One of a case's agent runs, newest first. */
+export interface CaseRunSummary {
+  id: string
+  status: AgentRunStatus
+  revisionCount: number
+  failureReason: string | null
+  createdAt: string
+  completedAt: string | null
+  /** The Coordinator's non-chemical tips for the farmer, one per line. */
+  farmerAdvice: string | null
 }
 
 export interface CasePhoto {

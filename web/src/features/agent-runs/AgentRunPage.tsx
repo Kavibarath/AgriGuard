@@ -43,7 +43,12 @@ export function AgentRunPage() {
           <>
             <header className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h1 className="text-2xl font-semibold text-stone-900">Case {run.data.caseReferenceNo}</h1>
+                <h1 className="text-2xl font-semibold text-stone-900">
+                  Case{' '}
+                  <Link to={`/cases/${run.data.caseId}`} className="text-brand-700 hover:underline">
+                    {run.data.caseReferenceNo}
+                  </Link>
+                </h1>
                 <p className="text-sm text-stone-600">{run.data.objective}</p>
               </div>
               <div className="flex items-center gap-3">

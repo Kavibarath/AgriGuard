@@ -12,6 +12,8 @@ export const registryKeys = {
   plots: (query?: registry.PlotQuery) => ['registry', 'plots', query ?? {}] as const,
   plot: (id: string) => ['registry', 'plot', id] as const,
   cropCycle: (id: string) => ['registry', 'crop-cycle', id] as const,
+  safetyProfile: (plotId: string) => ['registry', 'safety-profile', plotId] as const,
+  treatmentHistory: (query: registry.TreatmentHistoryQuery) => ['registry', 'treatment-history', query] as const,
   districts: ['registry', 'districts'] as const,
   crops: ['registry', 'crops'] as const,
 }
@@ -20,10 +22,27 @@ export const useFarms = (query: registry.FarmQuery) =>
   useQuery({ queryKey: registryKeys.farms(query), queryFn: () => registry.listFarms(query) })
 
 export const useFarm = (id: string) =>
-  useQuery({ queryKey: registryKeys.farm(id), queryFn: () => registry.getFarm(id) })
+  useQuery({ queryKey: registryKeys.farm(id), queryFn: () => registry.getFarm(id), enabled: Boolean(id) })
 
 export const usePlots = (query: registry.PlotQuery, enabled = true) =>
   useQuery({ queryKey: registryKeys.plots(query), queryFn: () => registry.listPlots(query), enabled })
+
+export const usePlot = (id: string) =>
+  useQuery({ queryKey: registryKeys.plot(id), queryFn: () => registry.getPlot(id), enabled: Boolean(id) })
+
+/**
+ * Derived on the server from the spray history and the rules table, so it lives in the registry
+ * subtree: sowing or advancing a stage (which can move the harvest date) refreshes it too.
+ */
+export const useSafetyProfile = (plotId: string) =>
+  useQuery({ queryKey: registryKeys.safetyProfile(plotId), queryFn: () => registry.getSafetyProfile(plotId), enabled: Boolean(plotId) })
+
+export const useTreatmentHistory = (query: registry.TreatmentHistoryQuery, enabled = true) =>
+  useQuery({
+    queryKey: registryKeys.treatmentHistory(query),
+    queryFn: () => registry.getTreatmentHistory(query),
+    enabled: enabled && Boolean(query.plotId),
+  })
 
 export const useCropCycle = (id: string | null) =>
   useQuery({

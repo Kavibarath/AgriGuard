@@ -1,6 +1,6 @@
 import { api } from '@/lib/api'
 import { queryString } from '@/lib/query-string'
-import type { Crop, CropCycle, District, Farm, PagedResult, Plot } from './types'
+import type { Crop, CropCycle, District, Farm, PagedResult, Plot, PlotSafetyProfile, PlotTreatmentHistory } from './types'
 
 export interface FarmQuery {
   page?: number
@@ -53,7 +53,18 @@ export const createPlot = (input: PlotInput & { farmId: string }) =>
 export const updatePlot = (id: string, input: PlotInput & { status: string }) =>
   api<Plot>(`/api/plots/${id}`, { method: 'PUT', json: input })
 
-export const getCropCycle = (id: string) => api<CropCycle>(`/api/crop-cycles/${id}`)
+export const getSafetyProfile = (plotId: string) => api<PlotSafetyProfile>(`/api/plots/${plotId}/safety-profile`)
+
+export interface TreatmentHistoryQuery {
+  plotId: string
+  from?: string
+  to?: string
+}
+
+export const getTreatmentHistory = (query: TreatmentHistoryQuery) =>
+  api<PlotTreatmentHistory>(`/api/reports/plot-treatment-history${queryString(query)}`)
+
+export const getCropCycle =(id: string) => api<CropCycle>(`/api/crop-cycles/${id}`)
 
 export const createCropCycle = (input: {
   plotId: string

@@ -2,6 +2,8 @@ import { createBrowserRouter, createMemoryRouter, Navigate, type RouteObject } f
 import { MessagePage } from '@/components/MessagePage'
 import { AgentRunPage } from '@/features/agent-runs/AgentRunPage'
 import { AgentRunsPage } from '@/features/agent-runs/AgentRunsPage'
+import { CaseDetailPage } from '@/features/cases/CaseDetailPage'
+import { CasesPage } from '@/features/cases/CasesPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
@@ -12,6 +14,7 @@ import { HarvestPage } from '@/features/harvest/HarvestPage'
 import { IntelligencePage } from '@/features/intelligence/IntelligencePage'
 import { FarmDetailPage } from '@/features/registry/FarmDetailPage'
 import { FarmsPage } from '@/features/registry/FarmsPage'
+import { PlotDetailPage } from '@/features/registry/PlotDetailPage'
 import { RulesPage } from '@/features/rules/RulesPage'
 
 export const routes: RouteObject[] = [
@@ -30,8 +33,11 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/farms', element: <FarmsPage /> },
           { path: '/farms/:farmId', element: <FarmDetailPage /> },
+          { path: '/plots/:plotId', element: <PlotDetailPage /> },
           // Component B. Viewing is open to the same roles (the API scopes the rows); deciding
           // is Field Agronomist only, enforced by the API and explained in the decision panel.
+          { path: '/cases', element: <CasesPage /> },
+          { path: '/cases/:caseId', element: <CaseDetailPage /> },
           { path: '/agent-runs', element: <AgentRunsPage /> },
           { path: '/agent-runs/:runId', element: <AgentRunPage /> },
           // Component D. Forecasts and bookings are scoped by the API like the registry.

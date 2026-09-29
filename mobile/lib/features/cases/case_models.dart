@@ -1,3 +1,5 @@
+import 'dart:math';
+
 // Mirrors the API's case, plot and agent-run DTOs that the farmer's screens use.
 // Enums arrive as names; unknown values fall back rather than crash an older app build.
 
@@ -49,6 +51,8 @@ class Symptom {
 
   final String code;
   final String label;
+
+  Map<String, dynamic> toJson() => {'code': code, 'label': label};
 }
 
 /// A plot the farmer can report on: only ones with a crop growing now.
@@ -88,6 +92,29 @@ class ReportablePlot {
   final String stage;
   final double latitude;
   final double longitude;
+
+  /// The phone's own copy, kept so the report form still opens without a signal.
+  Map<String, dynamic> toJson() => {
+        'plotId': plotId,
+        'plotCode': plotCode,
+        'farmName': farmName,
+        'cropCycleId': cropCycleId,
+        'cropName': cropName,
+        'stage': stage,
+        'latitude': latitude,
+        'longitude': longitude,
+      };
+
+  factory ReportablePlot.fromJson(Map<String, dynamic> json) => ReportablePlot(
+        plotId: json['plotId'] as String,
+        plotCode: json['plotCode'] as String,
+        farmName: json['farmName'] as String,
+        cropCycleId: json['cropCycleId'] as String,
+        cropName: json['cropName'] as String,
+        stage: json['stage'] as String,
+        latitude: (json['latitude'] as num).toDouble(),
+        longitude: (json['longitude'] as num).toDouble(),
+      );
 }
 
 class CaseSummary {
@@ -284,7 +311,21 @@ class NewCase {
     required this.latitude,
     required this.longitude,
     this.farmerNote,
+    this.clientReference,
+    this.capturedAt,
   });
+
+  factory NewCase.fromJson(Map<String, dynamic> json) => NewCase(
+        plotId: json['plotId'] as String,
+        cropCycleId: json['cropCycleId'] as String,
+        symptomCodes: List<String>.from(json['symptomCodes'] as List),
+        severity: CaseSeverity.fromWire(json['severity'] as String),
+        latitude: (json['latitude'] as num).toDouble(),
+        longitude: (json['longitude'] as num).toDouble(),
+        farmerNote: json['farmerNote'] as String?,
+        clientReference: json['clientReference'] as String?,
+        capturedAt: json['capturedAt'] == null ? null : DateTime.parse(json['capturedAt'] as String),
+      );
 
   final String plotId;
   final String cropCycleId;
@@ -294,6 +335,25 @@ class NewCase {
   final double longitude;
   final String? farmerNote;
 
+  /// Made on the phone before the first attempt and sent with every retry, so the API stores the
+  /// report once however many times it arrives (a lost response, then the offline queue).
+  final String? clientReference;
+
+  /// When the farmer pressed "Report problem"; sent only when the report waited in the queue.
+  final DateTime? capturedAt;
+
+  NewCase withCapturedAt(DateTime at) => NewCase(
+        plotId: plotId,
+        cropCycleId: cropCycleId,
+        symptomCodes: symptomCodes,
+        severity: severity,
+        latitude: latitude,
+        longitude: longitude,
+        farmerNote: farmerNote,
+        clientReference: clientReference,
+        capturedAt: at,
+      );
+
   Map<String, dynamic> toJson() => {
         'plotId': plotId,
         'cropCycleId': cropCycleId,
@@ -302,5 +362,18 @@ class NewCase {
         'latitude': latitude,
         'longitude': longitude,
         'farmerNote': (farmerNote?.trim().isEmpty ?? true) ? null : farmerNote!.trim(),
+        'clientReference': ?clientReference,
+        'capturedAt': ?capturedAt?.toUtc().toIso8601String(),
       };
+}
+
+/// A fresh random (version 4) UUID for [NewCase.clientReference]. From the secure generator:
+/// the reference must not be guessable or repeat across phones.
+String newClientReference([Random? random]) {
+  final rng = random ?? Random.secure();
+  final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }

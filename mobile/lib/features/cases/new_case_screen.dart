@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/location/location_service.dart';
 import '../../core/photos/photo_source.dart';
+import '../auth/auth_controller.dart';
+import 'case_outbox.dart';
 import 'case_models.dart';
 import 'case_photos.dart';
 import 'case_providers.dart';
@@ -34,6 +38,7 @@ class _NewCaseScreenState extends ConsumerState<NewCaseScreen> {
   CaseSeverity _severity = CaseSeverity.medium;
 
   GeoFix? _fix;
+  String? _clientReference;
   bool _locating = true;
   bool _submitting = false;
   String? _error;
@@ -84,47 +89,96 @@ class _NewCaseScreenState extends ConsumerState<NewCaseScreen> {
     if (!formValid) return;
 
     final plot = _plot!;
+    final user = ref.read(currentUserProvider);
+    // Made once and kept for every retry of this report, so the API can tell a retry from a
+    // second report even when the first attempt arrived and only its reply was lost.
+    _clientReference ??= newClientReference();
+    final newCase = NewCase(
+      plotId: plot.plotId,
+      cropCycleId: plot.cropCycleId,
+      symptomCodes: _symptoms.toList(),
+      severity: _severity,
+      // Where the phone is; if it could not tell, where the plot is registered.
+      latitude: _fix?.latitude ?? plot.latitude,
+      longitude: _fix?.longitude ?? plot.longitude,
+      farmerNote: _note.text,
+      clientReference: _clientReference,
+    );
+    final label = '${plot.plotCode} · ${plot.cropName}';
+    final outbox = ref.read(caseOutboxProvider.notifier);
+
     setState(() {
       _submitting = true;
       _error = null;
     });
 
+    final CaseDetail created;
     try {
-      final created = await ref.read(caseRepositoryProvider).reportCase(NewCase(
-            plotId: plot.plotId,
-            cropCycleId: plot.cropCycleId,
-            symptomCodes: _symptoms.toList(),
-            severity: _severity,
-            // Where the phone is; if it could not tell, where the plot is registered.
-            latitude: _fix?.latitude ?? plot.latitude,
-            longitude: _fix?.longitude ?? plot.longitude,
-            farmerNote: _note.text,
-          ));
-
-      // The case exists now, whatever happens to the photos: a failed upload must not lose the
-      // report. Anything that did not go up can be added again from the case page.
-      var failed = 0;
-      for (final photo in _photos) {
-        try {
-          await ref.read(caseRepositoryProvider).uploadPhoto(created.id, photo.bytes, photo.name);
-        } on ApiException {
-          failed++;
-        }
+      created = await ref.read(caseRepositoryProvider).reportCase(newCase);
+    } on ApiException catch (e) {
+      if (!e.isNetworkError || user == null) {
+        if (mounted) setState(() => _error = e.message);
+        return;
       }
-
-      ref.invalidate(myCasesProvider);
+      // No signal: keep the report, photos and all, and send it when the phone is back online.
+      await outbox.enqueue(ownerId: user.id, newCase: newCase, label: label, photos: _photos);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
-      context.pushReplacement('/cases/${created.id}');
-      if (failed > 0) {
-        messenger.showSnackBar(SnackBar(
-          content: Text('Problem reported, but $failed photo${failed == 1 ? '' : 's'} could not be sent. Add ${failed == 1 ? 'it' : 'them'} from this page.'),
-        ));
-      }
-    } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      _leave('/cases');
+      messenger.showSnackBar(const SnackBar(
+        content: Text('No connection. Your report is saved on this phone and will be sent when you are back online (see My crop problems).'),
+      ));
+      return;
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+
+    // The case exists now, whatever happens to the photos: a failed upload must not lose the
+    // report. Photos cut off by the connection wait in the queue; any the API refuses can be
+    // added again from the case page.
+    final unsent = <PickedPhoto>[];
+    var refused = 0;
+    for (final photo in _photos) {
+      try {
+        await ref.read(caseRepositoryProvider).uploadPhoto(created.id, photo.bytes, photo.name);
+      } on ApiException catch (e) {
+        if (e.isNetworkError) {
+          unsent.add(photo);
+        } else {
+          refused++;
+        }
+      }
+    }
+    if (unsent.isNotEmpty && user != null) {
+      await outbox.enqueue(ownerId: user.id, newCase: newCase, label: label, photos: unsent, caseId: created.id);
+    } else {
+      // The phone is online: anything still waiting from earlier goes along now.
+      unawaited(outbox.sync());
+    }
+
+    ref.invalidate(myCasesProvider);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    context.pushReplacement('/cases/${created.id}');
+    if (unsent.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Problem reported. ${_photoCount(unsent.length)} will be sent when the connection is back.'),
+      ));
+    } else if (refused > 0) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Problem reported, but ${_photoCount(refused)} could not be sent. Add ${refused == 1 ? 'it' : 'them'} from this page.'),
+      ));
+    }
+  }
+
+  static String _photoCount(int n) => '$n photo${n == 1 ? '' : 's'}';
+
+  /// Back to where the farmer came from (usually their case list), or to [fallback].
+  void _leave(String fallback) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(fallback);
     }
   }
 

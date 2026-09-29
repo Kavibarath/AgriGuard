@@ -18,7 +18,5 @@ export function isoToday(offsetDays = 0): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-/** "27 Sep 2026, 14:05" for audit timestamps. */
-export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+// Shared by every feature now; kept importable from here for the inventory screens.
+export { formatDateTime } from '@/lib/dates'
