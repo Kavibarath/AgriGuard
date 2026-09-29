@@ -69,7 +69,7 @@ export function AgentRunPage() {
                   <DecisionPanel run={run.data} canDecide={can(user?.role, 'CanApprovePrescriptions')} />
                 )}
                 {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
-                {run.data.verdict && <VerdictCard verdict={run.data.verdict} />}
+                {run.data.verdict && <VerdictCard verdict={run.data.verdict} review={run.data.safetyReview} />}
               </div>
               <div className="space-y-6">
                 <RunSteps run={run.data} />

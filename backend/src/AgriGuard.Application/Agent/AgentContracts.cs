@@ -51,7 +51,9 @@ public sealed record AgentRunResultRequest(
     [property: JsonPropertyName("diagnosis")] JsonElement? Diagnosis,
     [property: JsonPropertyName("plan")] JsonElement? Plan,
     [property: JsonPropertyName("failure_reason")] string? FailureReason,
-    [property: JsonPropertyName("revisions")] int Revisions);
+    [property: JsonPropertyName("revisions")] int Revisions,
+    // The Validation agent's explanation of the verdict, when its review passed the consistency check.
+    [property: JsonPropertyName("safety_review")] JsonElement? SafetyReview = null);
 
 /// <summary>Where agent progress lands. The agent service holds no database access; this is its only write path.</summary>
 public interface IAgentCallbackService
@@ -104,6 +106,30 @@ public sealed record OutbreakSignalTool(
     string Summary,
     // Highest pressure first.
     IReadOnlyList<ConfirmedPathogenCountTool> ConfirmedPathogens);
+
+/// <summary>
+/// get_rule_limits: the rules-table row for a product on a crop, which the Validation agent quotes
+/// when it explains a verdict. <c>Approved</c> is false when no row exists (rule V2 fails), and the
+/// limits are then null.
+/// </summary>
+public sealed record RuleLimitsTool(
+    Guid ProductId,
+    string ProductName,
+    string ActiveIngredient,
+    string Unit,
+    decimal PackSize,
+    Guid CropId,
+    string CropName,
+    bool Approved,
+    bool? IsActive,
+    bool? IsRestricted,
+    decimal? MinDosePerHectare,
+    decimal? MaxDosePerHectare,
+    int? PreHarvestIntervalDays,
+    int? ReEntryIntervalHours,
+    int? MaxApplicationsPerCycle,
+    int? MinDaysBetweenApplications,
+    int? RainfastHours);
 
 public sealed record ConfirmedPathogenCountTool(string Code, string CommonName, int Cases, int SharePercent);
 
@@ -205,4 +231,5 @@ public interface IAgentToolService
     Task<StockAvailabilityTool> CheckStockAvailabilityAsync(Guid productId, Guid? districtId, DateOnly? usableOn, CancellationToken ct = default);
     Task<ProductPricingTool> GetProductPricingAsync(Guid productId, decimal? quantity, CancellationToken ct = default);
     Task<AgentVerdictTool> ValidatePrescriptionAsync(AgentProposalInput proposal, CancellationToken ct = default);
+    Task<RuleLimitsTool> GetRuleLimitsAsync(Guid productId, Guid cropId, CancellationToken ct = default);
 }

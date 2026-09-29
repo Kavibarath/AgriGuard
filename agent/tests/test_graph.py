@@ -91,7 +91,7 @@ class TestAllowList:
             by_role.setdefault(role, set()).add(tool)
 
         assert by_role["Coordinator"] == {"get_case_detail"}
-        assert by_role["Validation"] == {"validate_prescription"}
+        assert by_role["Validation"] == {"validate_prescription", "get_rule_limits"}
         # The headline control: the Diagnosis agent never touches stock or products.
         assert "check_stock_availability" not in by_role.get("Diagnosis", set())
         assert "search_approved_products" not in by_role.get("Diagnosis", set())

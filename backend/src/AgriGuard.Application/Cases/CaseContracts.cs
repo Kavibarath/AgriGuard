@@ -101,7 +101,10 @@ public sealed record AgentRunDto(
     // Litre or Kilogram: the dose is per hectare in this unit, the total quantity in it.
     ProductUnit? ProposedProductUnit,
     // Set once the run was approved.
-    IssuedPrescriptionDto? Prescription);
+    IssuedPrescriptionDto? Prescription,
+    // The Validation agent's plain-language review of the final verdict (agent/app/contracts.py
+    // SafetyReview), when it passed the consistency check. It explains; it never decides.
+    JsonElement? SafetyReview);
 
 public sealed record AgentRunStepDto(
     int SequenceNo,

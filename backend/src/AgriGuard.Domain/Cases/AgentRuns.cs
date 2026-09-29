@@ -44,7 +44,9 @@ public enum AgentEventType
     RunCompleted,
     // The proposal's stock, held while it awaits approval and released if it is not approved.
     StockHeld,
-    StockReleased
+    StockReleased,
+    // The Validation agent's reading of the verdict: accepted, or discarded with the reason.
+    SafetyReviewed
 }
 
 public enum ApprovalDecisionType { Approve, Reject, Revise }

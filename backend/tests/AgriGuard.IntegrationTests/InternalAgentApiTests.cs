@@ -237,7 +237,52 @@ public sealed class InternalAgentApiTests(AgriGuardApiFactory factory)
         Assert.Equal("Revise", verdict.GetProperty("outcome").GetString());
     }
 
+    [Fact]
+    public async Task Rule_limits_quote_the_rules_table_for_the_validation_agent()
+    {
+        var mancozeb = await factory.ProductIdAsync();
+        var tomato = await factory.CropIdAsync("TOM");
+        var rice = await factory.CropIdAsync("RIC");
+        var agent = factory.AgentClient();
+
+        var limits = await agent.GetFromJsonAsync<JsonElement>($"/internal/tools/rule-limits?productId={mancozeb}&cropId={tomato}");
+        var none = await agent.GetFromJsonAsync<JsonElement>($"/internal/tools/rule-limits?productId={mancozeb}&cropId={rice}");
+
+        Assert.True(limits.GetProperty("approved").GetBoolean());
+        Assert.Equal((1.5m, 2.5m, 7), (limits.GetProperty("minDosePerHectare").GetDecimal(), limits.GetProperty("maxDosePerHectare").GetDecimal(), limits.GetProperty("preHarvestIntervalDays").GetInt32()));
+        Assert.Equal("Kilogram", limits.GetProperty("unit").GetString());
+        // No rule for Mancozeb on paddy: the answer says so rather than failing (V2 is what it explains).
+        Assert.False(none.GetProperty("approved").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, none.GetProperty("maxDosePerHectare").ValueKind);
+    }
+
     // ── Callbacks ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_validation_agent_s_review_is_recorded_and_shown_with_the_run()
+    {
+        var (setup, farmer, _, runId) = await RunInFlightAsync();
+        await factory.SeedDealerStockAsync(setup.DistrictId);
+        var agent = factory.AgentClient();
+
+        await Post(agent, runId, new { eventType = "SafetyReviewed", agentRole = "Validation", payload = new { accepted = true, decision = "PASS" } });
+        await factory.AgentClient().PostAsJsonAsync($"/internal/agent-runs/{runId}/result", new
+        {
+            run_id = runId,
+            outcome = "PendingApproval",
+            proposal = new { product_id = await factory.ProductIdAsync(), dose_per_hectare = 2.0m, total_quantity = 1.6m, spray_date = Tomorrow, dealer_id = (Guid?)null, justification = "Protectant fungicide." },
+            verdict = new { outcome = "Approved", summary = "All rules passed.", results = Array.Empty<object>() },
+            revisions = 0,
+            safety_review = new { decision = "PASS", fixes = Array.Empty<object>(), explanation = "2.0 kg/ha is inside 1.5–2.5, and harvest is 49 days after the 7-day interval clears." }
+        });
+
+        var run = await farmer.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{runId}");
+        var events = (await farmer.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{runId}/events?pageSize=50")).Items();
+
+        Assert.Equal("PendingApproval", run.GetProperty("status").GetString());
+        Assert.StartsWith("2.0 kg/ha is inside", run.GetProperty("safetyReview").GetProperty("explanation").GetString());
+        Assert.Contains(events, e => e.GetProperty("eventType").GetString() == "SafetyReviewed");
+    }
 
     [Fact]
     public async Task Progress_events_build_the_plan_steps_and_timeline()

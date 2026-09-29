@@ -162,6 +162,16 @@ export interface Verdict {
   results: RuleResult[]
 }
 
+/**
+ * The Validation agent's reading of the verdict (agent/app/contracts.py SafetyReview, snake_case).
+ * It explains and suggests; the verdict alone decides.
+ */
+export interface SafetyReview {
+  decision: 'PASS' | 'REVISE' | 'REJECT'
+  explanation: string
+  fixes: { rule_code: string; problem: string; fix: string; suggested_value: string | null }[]
+}
+
 // ── Runs ─────────────────────────────────────────────────────────────────────
 
 export interface AgentRunStep {
@@ -214,6 +224,7 @@ export interface AgentRun {
   proposedProductName: string | null
   proposedProductUnit: ProductUnit | null
   prescription: IssuedPrescription | null
+  safetyReview: SafetyReview | null
 }
 
 export type AgentEventType =
@@ -233,6 +244,7 @@ export type AgentEventType =
   | 'RunCompleted'
   | 'StockHeld'
   | 'StockReleased'
+  | 'SafetyReviewed'
 
 export interface AgentRunEvent {
   id: string

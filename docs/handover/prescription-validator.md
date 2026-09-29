@@ -121,9 +121,51 @@ The same gate runs a second time when the agent reports a proposal as ready for 
 (`AgentCallbackService.AcceptProposalAsync`). If this validator does not return `Approved`, the run
 fails instead of reaching an agronomist, so a compromised agent cannot claim a pass.
 
+## The Validation agent's own reasoning (Student A's agent)
+
+The Validation agent (`agent/app/graph.py`, node `validation` and `review_verdict`) does two things.
+
+1. **It submits the proposal** to this validator through `validate_prescription`. The verdict it
+   gets back decides the route (pass → wait for a human, revise → back to the Action agent,
+   reject → end). That route never comes from the model.
+2. **It reasons about the verdict.** It fetches the rules-table row with its second tool,
+   `get_rule_limits` (`GET /internal/tools/rule-limits`), and asks the model for a `SafetyReview`
+   (`agent/app/contracts.py`). The review holds the decision restated, one fix per failed rule
+   with a suggested value, and a plain explanation with the real numbers. Example from a live run:
+   *"0.6 L/ha is within the 0.4 to 0.8 L/ha limit, and spraying on 2026-10-05 leaves the 3-day
+   pre-harvest interval well before the 2026-11-17 harvest."*
+
+**The guardrail** (`SafetyReview.problem_with`). The review is discarded, and the discard recorded
+on the timeline as `SafetyReviewed` with the reason, when:
+- its decision differs from the verdict (e.g. it says PASS on a Revise);
+- it cites a rule that did not fail;
+- it gives no fix on a Revise, or gives fixes on a pass.
+
+So a model steered by an injected note cannot reword a failure into a pass. If the model is down,
+the review is skipped and the run carries on, because the verdict does not depend on it.
+
+**Where the fixes go.** On a revision the Action agent is told the rule engine's own messages
+first (always), then the Validation agent's suggestions (`revision_guidance` in `contracts.py`). The
+review can add advice; it can never remove or replace the validator's words. The next proposal
+is validated again from scratch anyway.
+
+**Where you see it.** The console's "Safety rules" card shows "Validation agent's reading" under
+the eleven rules. The run's timeline shows each `SafetyReviewed` event, accepted or set aside.
+
+**Viva questions to expect.**
+- *"Is your Validation agent just an HTTP call?"* No. It has its own tools (the validator and the
+  rules table), its own typed output (`SafetyReview`), and its own reasoning (turning failures
+  into concrete fixes). But deliberately it has no authority: the decision is deterministic.
+- *"Why let the model near safety at all?"* It explains and advises; it does not decide. The
+  explanation helps the agronomist approve faster, and the fixes help the Action agent converge in
+  fewer revisions. The consistency check means a wrong or manipulated review is thrown away.
+- Tests: `agent/tests/test_validation_agent.py` (a review that says PASS on a Revise is discarded
+  and the run still follows the verdict).
+
+**Practice change.** Make the check stricter: also discard a review whose `suggested_value` for V3
+lies outside the rule's dose range (read it from the `get_rule_limits` answer).
+
 ## What is not done yet
 
-- V8 needs the Open-Meteo client (Component D). Its input shape is already defined, so wiring it is
-  passing a populated `WeatherInput` instead of `null` in `AgentPrescriptionGate`.
 - On the user route (`/api/prescriptions/validate`), V9 is still only evaluated when the caller
   supplies stock figures.

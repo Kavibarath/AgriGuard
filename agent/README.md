@@ -31,7 +31,7 @@ Validation ── PASS ───► stops; a human decides
 | Coordinator | Plans the run | `get_case_detail` |
 | Diagnosis | Ranks candidate pathogens with evidence | case, crop history, weather, outbreak signal |
 | Action | Picks an approved product, dose and spray date | products, safety profile, stock, pricing |
-| Validation | Submits the proposal to the deterministic C# validator | `validate_prescription` |
+| Validation | Submits the proposal to the deterministic C# validator (which alone decides the route), then explains the verdict and turns each failure into a concrete fix; a review that contradicts the verdict is discarded | `validate_prescription`, `get_rule_limits` |
 
 ## What makes it *controlled*
 

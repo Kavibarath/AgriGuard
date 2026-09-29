@@ -212,6 +212,31 @@ public sealed class AgentToolService(
     public Task<AgentVerdictTool> ValidatePrescriptionAsync(AgentProposalInput proposal, CancellationToken ct = default) =>
         prescriptionGate.CheckAsync(proposal, ct);
 
+    /// <summary>
+    /// The limits the validator applied, for the Validation agent to quote. Read-only, and only
+    /// explains: the verdict itself comes from validate_prescription.
+    /// </summary>
+    public async Task<RuleLimitsTool> GetRuleLimitsAsync(Guid productId, Guid cropId, CancellationToken ct = default)
+    {
+        var product = await db.Products.AsNoTracking()
+            .Where(p => p.Id == productId)
+            .Select(p => new { p.Name, ActiveIngredient = p.ActiveIngredient.Name, p.Unit, p.PackSize })
+            .FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException("Product", productId);
+        var cropName = await db.Crops.AsNoTracking().Where(c => c.Id == cropId).Select(c => c.Name).FirstOrDefaultAsync(ct)
+                       ?? throw new NotFoundException("Crop", cropId);
+
+        var rule = await db.ProductCropApprovals.AsNoTracking()
+            .Where(a => a.ProductId == productId && a.CropId == cropId)
+            .FirstOrDefaultAsync(ct);
+
+        return new RuleLimitsTool(
+            productId, product.Name, product.ActiveIngredient, product.Unit.ToString(), product.PackSize, cropId, cropName,
+            rule is not null, rule?.IsActive, rule?.IsRestricted, rule?.MinDosePerHectare, rule?.MaxDosePerHectare,
+            rule?.PreHarvestIntervalDays, rule?.ReEntryIntervalHours, rule?.MaxApplicationsPerCycle,
+            rule?.MinDaysBetweenApplications, rule?.RainfastHours);
+    }
+
     private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string Num(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);

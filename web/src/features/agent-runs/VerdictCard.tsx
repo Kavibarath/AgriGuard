@@ -1,6 +1,6 @@
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ruleStatusTone, verdictTone } from '@/components/ui/status-tones'
-import type { RuleStatus, Verdict } from './types'
+import type { RuleStatus, SafetyReview, Verdict } from './types'
 
 const ruleStatusLabels: Record<RuleStatus, string> = {
   Passed: 'Passed',
@@ -20,7 +20,7 @@ const statusTone = (status: string) => ruleStatusTone[status] ?? 'warning'
  * Every rule, not just the failures (§7): the agronomist sees what was checked, what passed and
  * what could not be checked — "not checked" is shown as a caution, never as a pass.
  */
-export function VerdictCard({ verdict }: { verdict: Verdict }) {
+export function VerdictCard({ verdict, review }: { verdict: Verdict; review?: SafetyReview | null }) {
   return (
     <section aria-labelledby="verdict-heading" className="space-y-3 rounded-lg border border-stone-200 bg-white p-4">
       <header className="flex flex-wrap items-start justify-between gap-2">
@@ -69,6 +69,26 @@ export function VerdictCard({ verdict }: { verdict: Verdict }) {
           </tbody>
         </table>
       </div>
+
+      {review && (
+        <div className="space-y-2 rounded-md bg-stone-50 p-3" aria-labelledby="review-heading">
+          <h3 id="review-heading" className="text-sm font-medium text-stone-900">
+            Validation agent's reading
+          </h3>
+          <p className="text-sm text-stone-700">{review.explanation}</p>
+          {review.fixes.length > 0 && (
+            <ul className="space-y-1 text-sm text-stone-700">
+              {review.fixes.map((fix) => (
+                <li key={fix.rule_code}>
+                  <span className="font-medium text-stone-900">{fix.rule_code}</span>: {fix.fix}
+                  {fix.suggested_value && <span className="text-stone-500"> (suggested {fix.suggested_value})</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-stone-500">Written by the model from the rule results above. It explains them; it cannot change them.</p>
+        </div>
+      )}
     </section>
   )
 }

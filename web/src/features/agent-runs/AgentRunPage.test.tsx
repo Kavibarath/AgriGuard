@@ -61,6 +61,47 @@ describe('AgentRunPage', () => {
     expect(screen.getByText(/instruction-like text in the note/i)).toBeInTheDocument()
   })
 
+  it('shows the Validation agent’s reading under the rules, marked as unable to change them', async () => {
+    signIn()
+    renderApp(`/agent-runs/${RUN_ID}`)
+
+    const rules = await screen.findByRole('region', { name: 'Safety rules' })
+    expect(within(rules).getByText(/inside the 1.5–2.5 kg\/ha range/)).toBeInTheDocument()
+    expect(within(rules).getByText(/it cannot change them/)).toBeInTheDocument()
+  })
+
+  it('shows on the timeline when a review was set aside for contradicting the verdict', async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/api/agent-runs/:id/events`, () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: 'e7',
+              eventType: 'SafetyReviewed',
+              agentRole: 'Validation',
+              toolName: null,
+              payload: { accepted: false, reason: "The review said PASS but the rule engine's verdict is Revise.", review: null },
+              durationMs: null,
+              occurredAt: '2026-09-25T11:03:57.000Z',
+              correlationId: 'agent-run-1',
+            },
+          ],
+          page: 1,
+          pageSize: 100,
+          totalCount: 1,
+          totalPages: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+      ),
+    )
+    signIn()
+    renderApp(`/agent-runs/${RUN_ID}`)
+
+    expect(await screen.findByText('Safety review')).toBeInTheDocument()
+    expect(screen.getByText("Set aside: The review said PASS but the rule engine's verdict is Revise.")).toBeInTheDocument()
+  })
+
   it('shows on the timeline that the proposal’s stock is held until the decision', async () => {
     signIn()
     renderApp(`/agent-runs/${RUN_ID}`)

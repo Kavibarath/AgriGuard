@@ -99,6 +99,7 @@ async def execute_run(
             plan=state.get("plan"),
             failure_reason=state.get("failure_reason"),
             revisions=state.get("revisions", 0),
+            safety_review=state.get("safety_review"),
         )
     except TimeoutError:
         result = _failed(request, f"The run exceeded its {settings.run_timeout_seconds:.0f}-second limit.")

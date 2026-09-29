@@ -19,6 +19,7 @@ const labels: Record<AgentEventType, string> = {
   RunCompleted: 'Run finished',
   StockHeld: 'Stock held',
   StockReleased: 'Stock released',
+  SafetyReviewed: 'Safety review',
 }
 
 /** Events that need the reader's attention are marked, and never by colour alone. */
@@ -64,6 +65,10 @@ function detail(event: AgentRunEvent): string {
         .join(' · ')
     case 'StockReleased':
       return `Back on sale: ${text(p.reason)}`
+    case 'SafetyReviewed': {
+      if (p.accepted === true && p.review && typeof p.review === 'object') return text((p.review as { explanation?: unknown }).explanation)
+      return `Set aside: ${text(p.reason)}`
+    }
     default:
       return ''
   }

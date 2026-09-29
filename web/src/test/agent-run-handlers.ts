@@ -141,6 +141,11 @@ export function makeRun(overrides: Partial<AgentRun> = {}): AgentRun {
     proposedProductName: 'Azoxystrobin 25 SC',
     proposedProductUnit: 'Litre',
     prescription: null,
+    safetyReview: {
+      decision: 'PASS',
+      explanation: '2 kg/ha is inside the 1.5–2.5 kg/ha range, and harvest is well after the 7-day interval.',
+      fixes: [],
+    },
     ...overrides,
   }
 }

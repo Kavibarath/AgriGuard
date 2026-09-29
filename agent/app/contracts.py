@@ -97,6 +97,82 @@ class Verdict(StrictModel):
         return "\n".join(f"- {f.code} ({f.severity}): {f.message}" for f in self.failures)
 
 
+class ReviewDecision(StrEnum):
+    PASS = "PASS"
+    REVISE = "REVISE"
+    REJECT = "REJECT"
+
+
+# The only decision a review may state for each verdict. The model restates it; it never chooses it.
+DECISION_FOR_VERDICT: dict[str, ReviewDecision] = {
+    "Approved": ReviewDecision.PASS,
+    "Revise": ReviewDecision.REVISE,
+    "Rejected": ReviewDecision.REJECT,
+}
+
+RuleCode = Annotated[str, StringConstraints(pattern=r"^V([1-9]|1[01])$")]
+
+
+class RuleFix(StrictModel):
+    rule_code: RuleCode
+    problem: ShortText
+    fix: ShortText
+    # A concrete value when one would fix it: "dose_per_hectare: 2.0", "spray_date: 2026-10-02".
+    suggested_value: ShortText | None = None
+
+
+class SafetyReview(StrictModel):
+    """
+    The Validation agent's own output: its reading of the deterministic verdict. It explains and
+    suggests; it has no say in the outcome, which is taken from the verdict alone.
+    """
+
+    decision: ReviewDecision
+    explanation: ShortText
+    fixes: list[RuleFix] = Field(default_factory=list, max_length=11)
+
+    def problem_with(self, verdict: Verdict) -> str | None:
+        """
+        Why this review cannot be trusted for this verdict, or None if it can. A review that
+        disagrees with the rule engine, or talks about rules that did not fail, is discarded:
+        a model that has been steered (by injected text, say) must not be able to reword the
+        verdict into something else.
+        """
+        expected = DECISION_FOR_VERDICT.get(verdict.outcome)
+        if expected is None:
+            return f"The verdict's outcome '{verdict.outcome}' is not one the review can restate."
+        if self.decision != expected:
+            return f"The review said {self.decision} but the rule engine's verdict is {verdict.outcome}."
+
+        failed = {f.code for f in verdict.failures}
+        cited = {fix.rule_code for fix in self.fixes}
+        if extra := sorted(cited - failed):
+            return f"The review cites rules that did not fail: {', '.join(extra)}."
+        if expected == ReviewDecision.REVISE and not self.fixes:
+            return "The review gave no fix for a verdict that asks for a revision."
+        if expected == ReviewDecision.PASS and self.fixes:
+            return "The review suggested fixes for a proposal that passed every rule."
+        return None
+
+    def guidance(self) -> str:
+        """The fixes, as lines the Action agent is shown after the rule engine's own messages."""
+        return "\n".join(
+            f"- {f.rule_code}: {f.fix}" + (f" (suggested {f.suggested_value})" if f.suggested_value else "")
+            for f in self.fixes
+        )
+
+
+def revision_guidance(verdict: Verdict, review: SafetyReview | None) -> str:
+    """
+    What the Action agent is told after a Revise verdict. The rule engine's messages always come
+    first and are never replaced: the Validation agent's fixes can only add to them.
+    """
+    guidance = verdict.revision_guidance()
+    if review is not None and review.fixes:
+        guidance += f"\nThe Validation agent suggests:\n{review.guidance()}"
+    return guidance
+
+
 # ── Run I/O ─────────────────────────────────────────────────────────────────
 class RunRequest(StrictModel):
     """What the backend posts to start a run. Ids only — the agent fetches the rest via tools."""
@@ -118,3 +194,5 @@ class RunResult(StrictModel):
     plan: Plan | None = None
     failure_reason: str | None = None
     revisions: int = 0
+    # The Validation agent's review of the final verdict, when it passed the consistency check.
+    safety_review: SafetyReview | None = None
