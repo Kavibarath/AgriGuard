@@ -114,6 +114,12 @@ public class InputOrder : AuditableEntity
     public DateTime? PackedAt { get; set; }
     public DateTime? CollectedAt { get; set; }
 
+    /// <summary>
+    /// Six digits only the farmer sees; the dealer needs them to mark the order Collected
+    /// (<see cref="PickupCodes"/>). Null only on orders created before codes existed.
+    /// </summary>
+    public string? PickupCode { get; set; }
+
     public uint Version { get; set; }
 
     public ICollection<InputOrderLine> Lines { get; set; } = new List<InputOrderLine>();

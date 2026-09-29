@@ -38,6 +38,7 @@ class HomeScreen extends ConsumerWidget {
           if (user.role == UserRole.farmer) ...[
             const _FeatureTile(icon: Icons.add_a_photo_outlined, title: 'Report a crop problem', subtitle: 'Symptoms and location', route: '/cases/new'),
             const _FeatureTile(icon: Icons.receipt_long, title: 'My crop problems', subtitle: 'AI advice, review and prescriptions', route: '/cases'),
+            const _FeatureTile(icon: Icons.shopping_bag_outlined, title: 'My orders', subtitle: 'Prescribed inputs, where to collect, pickup code', route: '/orders'),
             const _FeatureTile(icon: Icons.landscape, title: 'My farms & plots', subtitle: 'Plots, crop stages and spray safety', route: '/farms'),
             const _FeatureTile(icon: Icons.local_shipping, title: 'Harvest collection', subtitle: 'Best harvest days, spray weather, book a slot', route: '/harvest'),
           ] else if (user.role == UserRole.fieldAgronomist) ...[

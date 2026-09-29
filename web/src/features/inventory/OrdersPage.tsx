@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { orderStatusTone } from '@/components/ui/status-tones'
 import { userMessage } from '@/lib/api'
 import { formatDateTime, formatLkr } from './format'
+import { HandOverModal } from './HandOverModal'
 import { useFulfilOrder, useOrders } from './queries'
 import { fulfilActionLabels, orderStatusLabels, type Order, type OrderStatus } from './types'
 
@@ -31,6 +32,7 @@ export function OrdersPage() {
   const [params, setParams] = useSearchParams()
   const fulfil = useFulfilOrder()
   const [acting, setActing] = useState<string | null>(null)
+  const [handingOver, setHandingOver] = useState<Order | null>(null)
 
   const view = views.find((v) => v.value === params.get('view')) ?? views[0]
   const query = {
@@ -56,6 +58,11 @@ export function OrdersPage() {
   const advance = async (order: Order) => {
     if (!order.nextStatus) return
     fulfil.reset()
+    // Handing over needs the farmer's pickup code, asked for in a dialog.
+    if (order.nextStatus === 'Collected') {
+      setHandingOver(order)
+      return
+    }
     setActing(order.id)
     try {
       await fulfil.mutateAsync({ id: order.id, status: order.nextStatus })
@@ -143,7 +150,7 @@ export function OrdersPage() {
         </Link>
         <h1 className="text-2xl font-semibold text-stone-900">Orders</h1>
         <p className="text-sm text-stone-600">
-          Orders from approved prescriptions. The stock is already set aside: pack each order, then mark it collected when the farmer picks it up.
+          Orders from approved prescriptions. The stock is already set aside: pack each order, then hand it over when the farmer shows the pickup code on their phone.
         </p>
       </header>
 
@@ -195,6 +202,7 @@ export function OrdersPage() {
           </div>
         )}
       </AsyncBoundary>
+      <HandOverModal order={handingOver} onClose={() => setHandingOver(null)} />
     </main>
   )
 }

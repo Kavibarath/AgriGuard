@@ -10,6 +10,7 @@ import '../features/cases/cases_screen.dart';
 import '../features/cases/new_case_screen.dart';
 import '../features/harvest/harvest_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/orders/orders_screen.dart';
 import '../features/registry/farms_screen.dart';
 import '../features/registry/new_plot_screen.dart';
 import '../features/registry/plot_screen.dart';
@@ -45,6 +46,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/harvest', builder: (_, _) => const HarvestScreen()),
+      GoRoute(path: '/orders', builder: (_, _) => const OrdersScreen()),
       GoRoute(
         path: '/farms',
         builder: (_, _) => const FarmsScreen(),

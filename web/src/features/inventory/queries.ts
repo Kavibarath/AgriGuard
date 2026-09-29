@@ -50,7 +50,9 @@ export const useCreateReservation = () => useStockMutation(inventory.createReser
 export const useCommitReservation = () => useStockMutation(inventory.commitReservation)
 export const useReleaseReservation = () => useStockMutation(inventory.releaseReservation)
 export const useFulfilOrder = () =>
-  useStockMutation(({ id, status }: { id: string; status: OrderStatus }) => inventory.fulfilOrder(id, status))
+  useStockMutation(({ id, status, pickupCode }: { id: string; status: OrderStatus; pickupCode?: string }) =>
+    inventory.fulfilOrder(id, status, pickupCode),
+  )
 
 function useRuleMutation<TArgs, TResult>(mutationFn: (args: TArgs) => Promise<TResult>) {
   const queryClient = useQueryClient()

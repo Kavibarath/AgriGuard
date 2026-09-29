@@ -101,6 +101,30 @@ public sealed record OrderDto(
     DateTime? CollectedAt,
     IReadOnlyList<OrderLineDto> Lines);
 
+/// <summary>
+/// An order as its farmer sees it on the phone: where to collect it, what is in it, how far the
+/// dealer has got, and the pickup code (until it is collected).
+/// </summary>
+public sealed record FarmerOrderDto(
+    Guid Id,
+    string OrderNo,
+    OrderStatus Status,
+    string ShopName,
+    string? ShopAddress,
+    decimal ShopLatitude,
+    decimal ShopLongitude,
+    string? ShopPhone,
+    string? PrescriptionNo,
+    DateOnly? SprayDate,
+    decimal TotalAmount,
+    DateTime CreatedAt,
+    DateTime? ConfirmedAt,
+    DateTime? PackedAt,
+    DateTime? CollectedAt,
+    // Shown to the dealer at the counter. Null once the order is collected or cancelled.
+    string? PickupCode,
+    IReadOnlyList<OrderLineDto> Lines);
+
 // ── Requests ─────────────────────────────────────────────────────────────────
 
 public sealed record ProductRequest(
@@ -165,7 +189,8 @@ public sealed record CreateReservationRequest(
     DateOnly? UsableOn,
     string? Note);
 
-public sealed record FulfilOrderRequest(OrderStatus Status);
+/// <summary>To mark an order Collected, the dealer types the farmer's pickup code.</summary>
+public sealed record FulfilOrderRequest(OrderStatus Status, string? PickupCode = null);
 
 // ── Query options ────────────────────────────────────────────────────────────
 
@@ -264,6 +289,9 @@ public interface IOrderService
     Task<PagedResult<OrderDto>> ListAsync(OrderQuery query, CancellationToken ct = default);
     Task<OrderDto> GetAsync(Guid id, CancellationToken ct = default);
     Task<OrderDto> FulfilAsync(Guid id, FulfilOrderRequest request, CancellationToken ct = default);
+
+    /// <summary>The signed-in farmer's own orders, newest first. Farmers only.</summary>
+    Task<PagedResult<FarmerOrderDto>> ListMineAsync(PageRequest query, CancellationToken ct = default);
 }
 
 public static class ReservationLimits

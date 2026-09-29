@@ -155,17 +155,27 @@ public sealed class InventoryAndOrderTests(AgriGuardApiFactory factory)
     /// <summary>An approved run: its order sits Confirmed at the run's dealer, who is signed in.</summary>
     private async Task<(HttpClient Dealer, Guid OrderId)> ApprovedOrderAsync()
     {
+        var (dealer, _, orderId) = await ApprovedOrderWithFarmerAsync();
+        return (dealer, orderId);
+    }
+
+    /// <summary>The same, with the farmer who owns the order signed in too.</summary>
+    private async Task<(HttpClient Dealer, HttpClient Farmer, Guid OrderId)> ApprovedOrderWithFarmerAsync()
+    {
         var run = await factory.RunAwaitingApprovalAsync();
         var decision = await run.Agronomist.DecideAsync(run.RunId, "Approve", key: Guid.NewGuid().ToString());
         decision.EnsureSuccessStatusCode();
 
         var owner = await factory.QueryAsync(db => db.Users.SingleAsync(u => u.Id == run.Dealer.UserId));
         var orderId = await factory.QueryAsync(db => db.InputOrders.Where(o => o.Prescription!.AgentRunId == run.RunId).Select(o => o.Id).SingleAsync());
-        return (await factory.SignedInAsAsync(owner), orderId);
+        return (await factory.SignedInAsAsync(owner), run.Farmer, orderId);
     }
 
-    private static Task<HttpResponseMessage> FulfilAsync(HttpClient dealer, Guid orderId, string status) =>
-        dealer.PostAsJsonAsync($"/api/orders/{orderId}/fulfil", new { status });
+    private Task<string> PickupCodeAsync(Guid orderId) =>
+        factory.QueryAsync(db => db.InputOrders.Where(o => o.Id == orderId).Select(o => o.PickupCode!).SingleAsync());
+
+    private static Task<HttpResponseMessage> FulfilAsync(HttpClient dealer, Guid orderId, string status, string? pickupCode = null) =>
+        dealer.PostAsJsonAsync($"/api/orders/{orderId}/fulfil", new { status, pickupCode });
 
     [Fact]
     public async Task An_approved_prescription_s_order_reaches_the_dealer_confirmed()
@@ -189,13 +199,68 @@ public sealed class InventoryAndOrderTests(AgriGuardApiFactory factory)
         var (dealer, orderId) = await ApprovedOrderAsync();
 
         var packed = await FulfilAsync(dealer, orderId, "Packed");
-        var collected = await FulfilAsync(dealer, orderId, "Collected");
+        var collected = await FulfilAsync(dealer, orderId, "Collected", await PickupCodeAsync(orderId));
 
         Assert.Equal(HttpStatusCode.OK, packed.StatusCode);
         var order = await collected.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Collected", order.GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, order.GetProperty("nextStatus").ValueKind);
         Assert.NotEqual(JsonValueKind.Null, order.GetProperty("packedAt").ValueKind);
+        Assert.NotEqual(JsonValueKind.Null, order.GetProperty("collectedAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task Only_the_farmer_s_pickup_code_hands_the_order_over()
+    {
+        var (dealer, _, orderId) = await ApprovedOrderWithFarmerAsync();
+        await FulfilAsync(dealer, orderId, "Packed");
+        var code = await PickupCodeAsync(orderId);
+        var wrong = code == "000000" ? "111111" : "000000";
+
+        var none = await FulfilAsync(dealer, orderId, "Collected");
+        var guessed = await FulfilAsync(dealer, orderId, "Collected", wrong);
+        var right = await FulfilAsync(dealer, orderId, "Collected", $"{code[..3]} {code[3..]}");
+
+        Assert.Equal("PICKUP_CODE_REQUIRED", await none.ProblemCodeAsync());
+        Assert.Equal("WRONG_PICKUP_CODE", await guessed.ProblemCodeAsync());
+        Assert.Equal(HttpStatusCode.OK, right.StatusCode);
+        Assert.Equal("Collected", (await right.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task A_farmer_sees_their_own_order_where_to_collect_it_and_its_code()
+    {
+        var (dealer, farmer, orderId) = await ApprovedOrderWithFarmerAsync();
+        var stranger = await factory.SignedInAsAsync(await factory.CreateUserAsync(UserRole.Farmer));
+
+        var mine = await farmer.GetFromJsonAsync<JsonElement>("/api/orders/mine");
+        var theirs = await stranger.GetFromJsonAsync<JsonElement>("/api/orders/mine");
+        var asDealer = await dealer.GetAsync("/api/orders/mine");
+        var dealerView = await dealer.GetFromJsonAsync<JsonElement>($"/api/orders/{orderId}");
+
+        var order = Assert.Single(mine.Items());
+        Assert.Equal(orderId, order.GetProperty("id").GetGuid());
+        Assert.Equal("Confirmed", order.GetProperty("status").GetString());
+        Assert.Equal(await PickupCodeAsync(orderId), order.GetProperty("pickupCode").GetString());
+        Assert.StartsWith("Shop ", order.GetProperty("shopName").GetString());
+        Assert.Equal(2, order.GetProperty("lines")[0].GetProperty("packs").GetInt32());
+        Assert.Empty(theirs.Items());
+        Assert.Equal(HttpStatusCode.Forbidden, asDealer.StatusCode);
+        // The dealer never sees the code: they have to ask the farmer for it.
+        Assert.False(dealerView.TryGetProperty("pickupCode", out _));
+    }
+
+    [Fact]
+    public async Task Once_collected_the_code_is_no_longer_shown()
+    {
+        var (dealer, farmer, orderId) = await ApprovedOrderWithFarmerAsync();
+        await FulfilAsync(dealer, orderId, "Packed");
+        await FulfilAsync(dealer, orderId, "Collected", await PickupCodeAsync(orderId));
+
+        var order = Assert.Single((await farmer.GetFromJsonAsync<JsonElement>("/api/orders/mine")).Items());
+
+        Assert.Equal("Collected", order.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, order.GetProperty("pickupCode").ValueKind);
         Assert.NotEqual(JsonValueKind.Null, order.GetProperty("collectedAt").ValueKind);
     }
 

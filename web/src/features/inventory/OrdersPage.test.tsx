@@ -43,6 +43,44 @@ describe('OrdersPage', () => {
     await waitFor(() => expect(bodies).toEqual([{ status: 'Packed' }]))
   })
 
+  it('hands an order over only with the farmer’s pickup code', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.get(`${API_BASE_URL}/api/orders`, () => HttpResponse.json(paged([makeOrder({ status: 'Packed', nextStatus: 'Collected' })]))),
+      http.post(`${API_BASE_URL}/api/orders/:id/fulfil`, async ({ request }) => {
+        const body = (await request.json()) as { pickupCode?: string }
+        bodies.push(body)
+        return body.pickupCode === '482913'
+          ? HttpResponse.json(makeOrder({ status: 'Collected', nextStatus: null }))
+          : problem(422, 'Business rule violated', 'That is not this order’s pickup code. Check it with the farmer; nothing was handed over.', {
+              code: 'WRONG_PICKUP_CODE',
+            })
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp('/orders?view=Packed')
+
+    await user.click(await screen.findByRole('button', { name: 'Mark collected: ORD-2026-000001' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Hand over ORD-2026-000001' })
+    await user.type(within(dialog).getByLabelText('Pickup code'), '48291')
+    await user.click(within(dialog).getByRole('button', { name: 'Hand over' }))
+    expect(within(dialog).getByText('Enter the six digits shown on the farmer’s phone.')).toBeInTheDocument()
+
+    await user.type(within(dialog).getByLabelText('Pickup code'), '4')
+    await user.click(within(dialog).getByRole('button', { name: 'Hand over' }))
+    expect(await within(dialog).findByText(/not this order’s pickup code/)).toBeInTheDocument()
+
+    await user.clear(within(dialog).getByLabelText('Pickup code'))
+    await user.type(within(dialog).getByLabelText('Pickup code'), '482 913')
+    await user.click(within(dialog).getByRole('button', { name: 'Hand over' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(bodies).toEqual([
+      { status: 'Collected', pickupCode: '482914' },
+      { status: 'Collected', pickupCode: '482913' },
+    ])
+  })
+
   it('offers no step for a collected order', async () => {
     server.use(
       http.get(`${API_BASE_URL}/api/orders`, () =>
