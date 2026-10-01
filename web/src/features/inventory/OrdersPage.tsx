@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { FilterBar } from '@/components/layout/FilterBar'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Receipt } from '@/components/icons'
 import { Alert } from '@/components/ui/alert'
+import { StatTile } from '@/components/ui/StatTile'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { Button } from '@/components/ui/button'
 import { DataTable, Pagination, type Column } from '@/components/ui/DataTable'
@@ -10,9 +14,11 @@ import { SelectField } from '@/components/ui/select'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { orderStatusTone } from '@/components/ui/status-tones'
 import { userMessage } from '@/lib/api'
+import { AwaitingCollection } from './DealerPanels'
 import { formatDateTime, formatLkr } from './format'
 import { HandOverModal } from './HandOverModal'
 import { useFulfilOrder, useOrders } from './queries'
+import { cn } from '@/lib/utils'
 import { fulfilActionLabels, orderStatusLabels, type Order, type OrderStatus } from './types'
 
 /** "To pack" is the default: it is the dealer's actual work. */
@@ -80,8 +86,8 @@ export function OrdersPage() {
       sortable: true,
       render: (o) => (
         <div>
-          <p className="font-medium text-stone-900">{o.orderNo}</p>
-          {o.prescriptionNo && <p className="text-xs text-stone-500">Prescription {o.prescriptionNo}</p>}
+          <p className="font-medium whitespace-nowrap text-stone-900">{o.orderNo}</p>
+          {o.prescriptionNo && <p className="text-xs whitespace-nowrap text-stone-600">Prescription {o.prescriptionNo}</p>}
         </div>
       ),
     },
@@ -92,7 +98,7 @@ export function OrdersPage() {
       render: (o) => (
         <div>
           <p>{o.farmerName}</p>
-          {o.farmerPhone && <p className="text-xs text-stone-500">{o.farmerPhone}</p>}
+          {o.farmerPhone && <p className="text-xs text-stone-600">{o.farmerPhone}</p>}
         </div>
       ),
     },
@@ -109,7 +115,7 @@ export function OrdersPage() {
         </ul>
       ),
     },
-    { key: 'sprayDate', header: 'Spray date', secondary: true, render: (o) => o.sprayDate ?? '—' },
+    { key: 'sprayDate', header: 'Spray date', secondary: true, render: (o) => <span className="whitespace-nowrap">{o.sprayDate ?? '—'}</span> },
     { key: 'total', header: 'Total', sortable: true, numeric: true, secondary: true, render: (o) => formatLkr(o.totalAmount) },
     {
       key: 'status',
@@ -118,7 +124,7 @@ export function OrdersPage() {
       render: (o) => (
         <div className="space-y-0.5">
           <StatusBadge label={orderStatusLabels[o.status]} tone={orderStatusTone[o.status]} />
-          {o.collectedAt && <p className="text-xs text-stone-500">{formatDateTime(o.collectedAt)}</p>}
+          {o.collectedAt && <p className="text-xs text-stone-600">{formatDateTime(o.collectedAt)}</p>}
         </div>
       ),
     },
@@ -143,66 +149,94 @@ export function OrdersPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <header className="space-y-1">
-        <Link to="/dashboard" className="text-sm text-stone-500 hover:text-stone-800">
-          ← Dashboard
-        </Link>
-        <h1 className="text-2xl font-semibold text-stone-900">Orders</h1>
-        <p className="text-sm text-stone-600">
-          Orders from approved prescriptions. The stock is already set aside: pack each order, then hand it over when the farmer shows the pickup code on their phone.
-        </p>
-      </header>
+    <div className="space-y-4 pb-4">
+      <PageHeader
+        title="Orders"
+        description="Orders from approved prescriptions. The stock is already set aside: pack each order, then hand it over when the farmer shows the pickup code on their phone."
+      />
 
-      <div className="grid gap-3 sm:grid-cols-[14rem_18rem]">
-        <SelectField label="Show" value={view.value} onChange={(event) => updateParams({ view: event.target.value })}>
-          {views.map((v) => (
-            <option key={v.value} value={v.value}>
-              {v.label}
-            </option>
-          ))}
-        </SelectField>
-        <Field
-          label="Search"
-          type="search"
-          placeholder="Order, prescription or farmer"
-          defaultValue={query.search ?? ''}
-          onChange={(event) => updateParams({ search: event.target.value || undefined })}
-        />
+      <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {tiles.map((tile) => (
+          <OrderViewTile key={tile.status} {...tile} current={view.value === tile.status} />
+        ))}
+        <AwaitingCollection />
       </div>
 
-      {fulfil.error && <Alert tone="error">{userMessage(fulfil.error)}</Alert>}
-
-      <AsyncBoundary isPending={orders.isPending} error={orders.error} onRetry={orders.refetch} label="Loading orders">
-        {orders.data?.items.length === 0 ? (
-          <EmptyState
-            title={query.search ? 'No orders match that search' : `Nothing under “${view.label}”`}
-            description={
-              view.status === 'Confirmed' && !query.search
-                ? 'When an agronomist approves a prescription that sources from your shop, the order appears here.'
-                : 'Try another view or search.'
-            }
+      <div className="space-y-3">
+        <FilterBar className="border-earth-100 bg-earth-50/70 sm:grid-cols-[14rem_18rem]">
+          <SelectField label="Show" value={view.value} onChange={(event) => updateParams({ view: event.target.value })}>
+            {views.map((v) => (
+              <option key={v.value} value={v.value}>
+                {v.label}
+              </option>
+            ))}
+          </SelectField>
+          <Field
+            label="Search"
+            type="search"
+            placeholder="Order, prescription or farmer"
+            defaultValue={query.search ?? ''}
+            onChange={(event) => updateParams({ search: event.target.value || undefined })}
           />
-        ) : (
-          <div className="space-y-3">
-            <DataTable
-              caption="Input orders"
-              columns={columns}
-              rows={orders.data?.items ?? []}
-              rowKey={(o) => o.id}
-              sort={{ sortBy: query.sortBy, desc: query.desc }}
-              onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : undefined })}
+        </FilterBar>
+
+        {fulfil.error && <Alert tone="error">{userMessage(fulfil.error)}</Alert>}
+
+        <AsyncBoundary isPending={orders.isPending} error={orders.error} onRetry={orders.refetch} label="Loading orders">
+          {orders.data?.items.length === 0 ? (
+            <EmptyState
+              title={query.search ? 'No orders match that search' : `Nothing under “${view.label}”`}
+              description={
+                view.status === 'Confirmed' && !query.search
+                  ? 'When an agronomist approves a prescription that sources from your shop, the order appears here.'
+                  : 'Try another view or search.'
+              }
             />
-            <Pagination
-              page={orders.data?.page ?? 1}
-              totalPages={orders.data?.totalPages ?? 1}
-              totalCount={orders.data?.totalCount ?? 0}
-              onPageChange={(page) => updateParams({ page: String(page) })}
-            />
-          </div>
-        )}
-      </AsyncBoundary>
+          ) : (
+            <div className="space-y-3">
+              <DataTable
+                tone="earth"
+                caption="Input orders"
+                columns={columns}
+                rows={orders.data?.items ?? []}
+                rowKey={(o) => o.id}
+                sort={{ sortBy: query.sortBy, desc: query.desc }}
+                onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : undefined })}
+              />
+              <Pagination
+                page={orders.data?.page ?? 1}
+                totalPages={orders.data?.totalPages ?? 1}
+                totalCount={orders.data?.totalCount ?? 0}
+                onPageChange={(page) => updateParams({ page: String(page) })}
+              />
+            </div>
+          )}
+        </AsyncBoundary>
+      </div>
       <HandOverModal order={handingOver} onClose={() => setHandingOver(null)} />
-    </main>
+    </div>
+  )
+}
+
+/** The three stages of an order, counted; each tile opens its view. */
+const tiles: { status: OrderStatus; label: string; detail: string }[] = [
+  { status: 'Confirmed', label: 'To pack', detail: 'Stock set aside, not yet packed' },
+  { status: 'Packed', label: 'Awaiting collection', detail: 'Packed; handed over on the pickup code' },
+  { status: 'Collected', label: 'Collected', detail: 'Handed over to the farmer' },
+]
+
+function OrderViewTile({ status, label, detail, current }: (typeof tiles)[number] & { current: boolean }) {
+  const count = useOrders({ status, pageSize: 1 })
+  return (
+    <Link to={`?view=${status}`} replace aria-current={current ? 'true' : undefined} className="block rounded-xl">
+      <StatTile
+        interactive
+        label={label}
+        value={count.data?.totalCount ?? '—'}
+        detail={detail}
+        icon={<Receipt className="text-earth-600" />}
+        className={cn(current && 'border-earth-400 ring-1 ring-earth-400')}
+      />
+    </Link>
   )
 }

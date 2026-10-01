@@ -102,3 +102,32 @@ export interface CollectionBooking {
   distanceKm: number
   createdAt: string
 }
+
+// ── Spray window (GET /api/weather/spray-window), judged exactly as rule V8 judges a spray day ──
+
+export interface SprayDay {
+  date: string
+  suitable: boolean
+  rainProbabilityPercent: number
+  windSpeedKph: number
+  temperatureC: number
+  precipitationMm: number
+  /** Why the day does not suit spraying; empty when it does. */
+  problems: string[]
+}
+
+export interface SprayWindow {
+  plotId: string
+  plotCode: string
+  /** False when the forecast could not be fetched; `days` is then empty and nothing is guessed. */
+  forecastAvailable: boolean
+  source: string
+  fetchedAt: string | null
+  rainfastHours: number
+  productName: string | null
+  summary: string
+  recentRainMm: number | null
+  recentHumidityPercent: number | null
+  days: SprayDay[]
+  thresholds: { maxRainProbabilityPercent: number; maxWindSpeedKph: number; maxTemperatureC: number }
+}

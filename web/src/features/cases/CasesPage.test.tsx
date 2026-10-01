@@ -26,8 +26,10 @@ describe('CasesPage', () => {
     const row = await screen.findByRole('row', { name: /AG-2026-000003/ })
     expect(within(row).getByRole('link', { name: 'AG-2026-000003' })).toHaveAttribute('href', '/cases/case-1')
     expect(within(row).getByText('High')).toBeInTheDocument()
-    expect(requested[0]).toContain('sortBy=createdAt')
-    expect(requested[0]).toContain('desc=true')
+    // The top bar's bell asks for its own count too; this is the page's request.
+    const page = requested.find((q) => q.includes('pageSize=20'))
+    expect(page).toContain('sortBy=createdAt')
+    expect(page).toContain('desc=true')
   })
 
   it('puts every case on the map, linked and described for screen readers', async () => {
@@ -83,8 +85,9 @@ describe('CasesPage', () => {
     renderApp('/cases?status=Prescribed&cropId=c-tom')
 
     await screen.findByRole('row', { name: /AG-2026-000003/ })
-    expect(requested[0]).toContain('status=Prescribed')
-    expect(requested[0]).toContain('cropId=c-tom')
+    const page = requested.find((q) => q.includes('pageSize=20'))
+    expect(page).toContain('status=Prescribed')
+    expect(page).toContain('cropId=c-tom')
     expect(screen.getByLabelText('Status')).toHaveValue('Prescribed')
   })
 

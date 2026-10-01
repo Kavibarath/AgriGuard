@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { API_BASE_URL } from '@/lib/api'
-import type { CollectionBooking, CollectionCentre, CollectionSlot, ForecastVsActualReport, HarvestForecast } from '@/features/harvest/types'
+import type { CollectionBooking, CollectionCentre, CollectionSlot, ForecastVsActualReport, HarvestForecast, SprayWindow } from '@/features/harvest/types'
 import type { OutbreakSignal } from '@/features/intelligence/types'
 import type { LowStockReport, StockValuation } from '@/features/inventory/types'
 import { paged } from './registry-handlers'
@@ -137,7 +137,31 @@ export const lowStock: LowStockReport = {
 }
 
 /** Default Component D and report handlers: a severe late-blight signal, one forecast, one centre's slot and booking. */
+/** Two dry days, then rain: what the spray-weather panel shows. */
+export function makeSprayWindow(overrides: Partial<SprayWindow> = {}): SprayWindow {
+  return {
+    plotId: 'plot-1',
+    plotCode: 'P-01',
+    forecastAvailable: true,
+    source: 'open-meteo',
+    fetchedAt: '2026-09-29T02:00:00Z',
+    rainfastHours: 4,
+    productName: null,
+    summary: 'Suitable on 29 Sep, 30 Sep; rain likely on 1 Oct.',
+    recentRainMm: 12.5,
+    recentHumidityPercent: 88,
+    days: [
+      { date: '2026-09-29', suitable: true, rainProbabilityPercent: 10, windSpeedKph: 8, temperatureC: 24, precipitationMm: 0, problems: [] },
+      { date: '2026-09-30', suitable: true, rainProbabilityPercent: 20, windSpeedKph: 11, temperatureC: 25, precipitationMm: 0.1, problems: [] },
+      { date: '2026-10-01', suitable: false, rainProbabilityPercent: 80, windSpeedKph: 14, temperatureC: 22, precipitationMm: 9.4, problems: ['Rain likely (80%, 9.4 mm)'] },
+    ],
+    thresholds: { maxRainProbabilityPercent: 40, maxWindSpeedKph: 15, maxTemperatureC: 32 },
+    ...overrides,
+  }
+}
+
 export const harvestHandlers = [
+  http.get(`${API_BASE_URL}/api/weather/spray-window`, () => HttpResponse.json(makeSprayWindow())),
   http.get(`${API_BASE_URL}/api/intelligence/outbreak-signal`, () => HttpResponse.json(makeSignal())),
   http.get(`${API_BASE_URL}/api/harvest-forecasts`, () => HttpResponse.json(paged([makeForecast()]))),
   http.get(`${API_BASE_URL}/api/reports/harvest-forecast-vs-actual`, () => HttpResponse.json(makeReport())),

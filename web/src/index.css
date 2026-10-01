@@ -1,13 +1,73 @@
 @import "tailwindcss";
 
-/* Design tokens. Green for the brand, amber for warnings (spray/PHI), red for hard rejects. */
-@theme {
-  --color-brand-50: #f0f9f1;
+/*
+ * AgriGuard design tokens (docs/design/TOKENS.md). Canopy green is the brand and the primary
+ * action colour; earth brown marks soil, harvest and dealer surfaces; the surfaces are warm white.
+ * brand-500 is shared with the Flutter seed colour, so both apps are visibly the same product.
+ */
+@theme static {
+  /* Canopy — primary. Brand, navigation, primary actions, healthy states. */
+  --color-brand-50: #f2f8f3;
   --color-brand-100: #dcf1de;
-  --color-brand-500: #2f855a;
+  --color-brand-200: #bce3c2;
+  --color-brand-300: #8fcca0;
+  --color-brand-400: #58a97c;
+  --color-brand-500: #2f855a; /* shared with Flutter; 4.5:1 on white only, so text uses 600+ */
   --color-brand-600: #276749;
   --color-brand-700: #22543d;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-800: #1a4230;
+  --color-brand-900: #133025;
+
+  /* Earth — secondary. Soil, harvest, inventory, dealer surfaces, dividers. Never a second primary. */
+  --color-earth-50: #faf6f0;
+  --color-earth-100: #f0e7da;
+  --color-earth-200: #e0cdb4;
+  --color-earth-300: #c9ac86;
+  --color-earth-400: #a9835a;
+  --color-earth-500: #8b6340;
+  --color-earth-600: #6f4e33;
+  --color-earth-700: #563d28;
+  --color-earth-800: #3e2c1d;
+
+  /* Surfaces — warm white; the page is never pure #fff. */
+  --color-surface-page: #fdfcf9;
+  --color-surface-card: #ffffff;
+  --color-surface-sunken: #f6f4ee;
+  --color-surface-inset: #efece3;
+  --color-border-subtle: #e7e3d8;
+  --color-border-strong: #d5cfc0;
+
+  /* Semantic. The base shade is for icons, borders and text; -50/-200 are fills, -800 text on them. */
+  --color-success: #276749;
+  --color-success-50: #eef7f0;
+  --color-success-200: #bfe0c8;
+  --color-success-800: #1a4230;
+  --color-warning: #b45309; /* PHI windows, spray-weather cautions, expiring stock */
+  --color-warning-50: #fef7ec;
+  --color-warning-200: #f3d6a4;
+  --color-warning-800: #7c3a0a;
+  --color-danger: #b42318; /* hard rejects: V5 pre-harvest interval, V2 unapproved product */
+  --color-danger-50: #fdf1f0;
+  --color-danger-200: #f2c4bf;
+  --color-danger-800: #7f1d14;
+  --color-info: #2a78d6; /* 4.4:1 on white: icons and borders only; text uses info-800 */
+  --color-info-50: #eef5fc;
+  --color-info-200: #c3dbf4;
+  --color-info-800: #1a4a82;
+
+  /* The four agents: one hue and one glyph each, wherever an agent appears. */
+  --color-agent-coordinator: #22543d;
+  --color-agent-diagnosis: #1a5c9e;
+  --color-agent-action: #8b6340;
+  --color-agent-validation: #475569;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Source Serif 4", "Source Serif Pro", Georgia, Cambria, "Times New Roman", serif;
+
+  /* Depth, tinted with the deep canopy green — neutral black looks muddy on warm surfaces. */
+  --shadow-raised: 0 1px 2px rgb(19 48 37 / 0.06), 0 1px 3px rgb(19 48 37 / 0.04);
+  --shadow-lifted: 0 4px 12px rgb(19 48 37 / 0.1), 0 2px 4px rgb(19 48 37 / 0.05);
+  --shadow-overlay: 0 16px 40px rgb(19 48 37 / 0.2), 0 4px 10px rgb(19 48 37 / 0.08);
 
   /* Chart series, in this fixed order (checked for colour-blind separation as a set; never cycle). */
   --color-series-1: #2a78d6;
@@ -22,6 +82,94 @@
 
 @layer base {
   html {
-    @apply bg-stone-50 text-stone-900 antialiased;
+    background-color: var(--color-surface-page);
+    color: var(--color-stone-900);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Doses, stock counts and dates line up in columns everywhere. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  body {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  /* One focus treatment for every interactive element; outlines are never removed. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Serif display face: page titles, section headings and headline figures only. */
+  .font-display {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.01em;
+  }
+
+  /* Raised cards: resting shadow, deeper on hover. The lift itself is motion (below). */
+  .card-raised {
+    box-shadow: var(--shadow-raised);
+  }
+  .card-raised.is-interactive:hover {
+    box-shadow: var(--shadow-lifted);
+  }
+}
+
+/*
+ * Motion lives only here, and only for people who have not asked for less. With
+ * prefers-reduced-motion: reduce there is no lift, no press travel, no drift and no parallax;
+ * state changes still happen, instantly.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .card-raised.is-interactive {
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .card-raised.is-interactive:hover {
+    transform: translateY(-2px);
+  }
+
+  .press {
+    transition:
+      transform 80ms ease,
+      box-shadow 80ms ease,
+      background-color 120ms ease;
+  }
+  .press:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
+
+  .drift {
+    animation: drift 7s ease-in-out infinite;
+  }
+  .drift-slow {
+    animation: drift 8s ease-in-out -3s infinite;
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

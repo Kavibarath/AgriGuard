@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AlertTriangle, CheckCircle, StopOctagon } from '@/components/icons'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/Modal'
@@ -76,23 +77,35 @@ export function DecisionPanel({ run, canDecide }: { run: AgentRun; canDecide: bo
   const proposal = run.proposal
 
   return (
-    <section aria-labelledby="decision-heading" className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-      <header>
-        <h2 id="decision-heading" className="font-medium text-amber-950">
+    <section
+      aria-labelledby="decision-heading"
+      className="card-raised overflow-hidden rounded-xl border-2 border-brand-600 bg-surface-card"
+    >
+      <header className="border-b border-brand-100 bg-brand-50 px-4 py-3">
+        <h2 id="decision-heading" className="font-display text-xl leading-tight font-semibold text-brand-800">
           Your decision
         </h2>
-        <p className="text-sm text-amber-900">
+        <p className="mt-0.5 text-sm text-brand-800">
           The proposal passed the safety rules. Nothing is issued until you approve.
         </p>
       </header>
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => start('Approve')}>Approve</Button>
-        <Button variant="secondary" onClick={() => start('Revise')}>
-          Request revision
+      <div className="space-y-3 p-4">
+        <Button size="lg" className="w-full" onClick={() => start('Approve')}>
+          <CheckCircle />
+          Approve
         </Button>
-        <Button variant="danger" onClick={() => start('Reject')}>
-          Reject
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" className="flex-1" onClick={() => start('Revise')}>
+            <AlertTriangle size={16} className="text-warning" />
+            Request revision
+          </Button>
+          {/* Set apart from the routine actions: ending a run is not a slip of the finger. */}
+          <Button variant="secondary" className="flex-1 border-danger-200 text-danger-800 hover:border-danger hover:bg-danger-50" onClick={() => start('Reject')}>
+            <StopOctagon size={16} className="text-danger" />
+            Reject
+          </Button>
+        </div>
+        <p className="text-xs text-stone-600">Revising and rejecting ask for a reason; it is recorded in the audit trail.</p>
       </div>
 
       <Modal

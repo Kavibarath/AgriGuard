@@ -101,4 +101,16 @@ describe('LoginPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/rate limit exceeded/i)
   })
+
+  it('fills the form from a demo account, and signs in with it', async () => {
+    const user = userEvent.setup()
+    renderApp('/login')
+
+    await user.click(screen.getByRole('button', { name: /Field Agronomist demo account/ }))
+
+    expect(screen.getByLabelText('Email')).toHaveValue('agronomist@agriguard.demo')
+    expect(screen.getByLabelText('Password')).toHaveValue(PASSWORD)
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+    await waitFor(() => expect(useAuthStore.getState().user?.email).toBe(agronomist.email))
+  })
 })

@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { FilterBar } from '@/components/layout/FilterBar'
+import { Panel, PageHeader, PanelHeader } from '@/components/layout/PageHeader'
+import { TileMap } from '@/components/map/TileMap'
 import { Alert } from '@/components/ui/alert'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { Button } from '@/components/ui/button'
@@ -10,7 +13,8 @@ import { Modal } from '@/components/ui/Modal'
 import { ApiError, userMessage } from '@/lib/api'
 import { useCurrentUser } from '@/features/auth/auth-store'
 import { FarmFormModal } from './FarmFormModal'
-import { useDeleteFarm, useFarms } from './queries'
+import { useDeleteFarm, useFarms, usePlots } from './queries'
+import { RegistryTiles } from './RegistryTiles'
 import type { Farm } from './types'
 
 export function FarmsPage() {
@@ -29,6 +33,8 @@ export function FarmsPage() {
   }
 
   const farms = useFarms(query)
+  // Every plot the caller can see, for the map and the totals; a registry this size fits one page.
+  const plots = usePlots({ pageSize: 100 })
   const remove = useDeleteFarm()
 
   /**
@@ -80,7 +86,7 @@ export function FarmsPage() {
             <Button variant="ghost" className="h-8 px-2" onClick={() => setEditing(farm)}>
               Edit
             </Button>
-            <Button variant="ghost" className="h-8 px-2 text-red-700" onClick={() => setDeleting(farm)}>
+            <Button variant="ghost" className="h-8 px-2 text-danger-800 hover:bg-danger-50" onClick={() => setDeleting(farm)}>
               Delete
             </Button>
           </div>
@@ -89,59 +95,84 @@ export function FarmsPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-stone-900">Farms</h1>
-          <p className="text-sm text-stone-600">
-            {user?.role === 'FieldAgronomist' ? 'Farms in your district' : 'Your registered farms and their plots'}
-          </p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Farms"
+        description={user?.role === 'FieldAgronomist' ? 'Farms in your district' : 'Your registered farms and their plots'}
+        actions={canEdit ? <Button onClick={() => setEditing('new')}>Register farm</Button> : undefined}
+      />
+
+      <RegistryTiles farmCount={farms.data?.totalCount} plots={plots.data?.items} />
+
+      <div className="grid items-start gap-4 xl:grid-cols-12">
+        <div className="space-y-3 xl:col-span-8">
+          <FilterBar className="sm:grid-cols-[20rem]">
+            <Field
+              label="Search"
+              type="search"
+              placeholder="Farm or village"
+              defaultValue={query.search ?? ''}
+              onChange={(event) => updateParams({ search: event.target.value || undefined })}
+            />
+          </FilterBar>
+
+          <AsyncBoundary isPending={farms.isPending} error={farms.error} onRetry={farms.refetch} label="Loading farms">
+            {farms.data?.items.length === 0 ? (
+              <EmptyState
+                title={query.search ? 'No farms match that search' : 'No farms yet'}
+                description={
+                  query.search
+                    ? 'Try a different name or village.'
+                    : canEdit
+                      ? 'Register your first farm, then add the plots you grow on.'
+                      : 'No farms have been registered in your district yet.'
+                }
+                action={canEdit && !query.search ? <Button onClick={() => setEditing('new')}>Register farm</Button> : undefined}
+              />
+            ) : (
+              <div className="space-y-3">
+                <DataTable
+                  caption="Farms"
+                  columns={columns}
+                  rows={farms.data?.items ?? []}
+                  rowKey={(farm) => farm.id}
+                  sort={{ sortBy: query.sortBy, desc: query.desc }}
+                  onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : undefined })}
+                />
+                <Pagination
+                  page={farms.data?.page ?? 1}
+                  totalPages={farms.data?.totalPages ?? 1}
+                  totalCount={farms.data?.totalCount ?? 0}
+                  onPageChange={(page) => updateParams({ page: String(page) })}
+                />
+              </div>
+            )}
+          </AsyncBoundary>
         </div>
-        {canEdit && <Button onClick={() => setEditing('new')}>Register farm</Button>}
-      </header>
 
-      <div className="max-w-xs">
-        <Field
-          label="Search"
-          type="search"
-          placeholder="Farm or village"
-          defaultValue={query.search ?? ''}
-          onChange={(event) => updateParams({ search: event.target.value || undefined })}
-        />
+        <aside className="xl:sticky xl:top-20 xl:col-span-4">
+          <Panel aria-labelledby="plots-map-heading">
+            <PanelHeader id="plots-map-heading" title="Plots on the map" description="Each plot's registered centre; open one for its spray safety." />
+            {plots.data && plots.data.items.length > 0 ? (
+              <TileMap
+                label={`Map of ${plots.data.items.length} plot${plots.data.items.length === 1 ? '' : 's'}`}
+                height={360}
+                pins={plots.data.items.map((plot) => ({
+                  id: plot.id,
+                  position: { lat: plot.latitude, lng: plot.longitude },
+                  label: `Plot ${plot.plotCode} on ${plot.farmName}${plot.activeCycle ? `, growing ${plot.activeCycle.cropName}` : ', nothing growing'}`,
+                  tone: plot.activeCycle ? 'active' : 'neutral',
+                  variant: plot.activeCycle ? 'dot' : 'ring',
+                  href: `/plots/${plot.id}`,
+                }))}
+              />
+            ) : (
+              <p className="text-sm text-stone-600">{plots.isPending ? 'Loading plots…' : 'No plots registered yet.'}</p>
+            )}
+            <p className="mt-2 text-xs text-stone-600">Filled dot: a crop growing. Ring: nothing sown.</p>
+          </Panel>
+        </aside>
       </div>
-
-      <AsyncBoundary isPending={farms.isPending} error={farms.error} onRetry={farms.refetch} label="Loading farms">
-        {farms.data?.items.length === 0 ? (
-          <EmptyState
-            title={query.search ? 'No farms match that search' : 'No farms yet'}
-            description={
-              query.search
-                ? 'Try a different name or village.'
-                : canEdit
-                  ? 'Register your first farm, then add the plots you grow on.'
-                  : 'No farms have been registered in your district yet.'
-            }
-            action={canEdit && !query.search ? <Button onClick={() => setEditing('new')}>Register farm</Button> : undefined}
-          />
-        ) : (
-          <div className="space-y-3">
-            <DataTable
-              caption="Farms"
-              columns={columns}
-              rows={farms.data?.items ?? []}
-              rowKey={(farm) => farm.id}
-              sort={{ sortBy: query.sortBy, desc: query.desc }}
-              onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : undefined })}
-            />
-            <Pagination
-              page={farms.data?.page ?? 1}
-              totalPages={farms.data?.totalPages ?? 1}
-              totalCount={farms.data?.totalCount ?? 0}
-              onPageChange={(page) => updateParams({ page: String(page) })}
-            />
-          </div>
-        )}
-      </AsyncBoundary>
 
       <FarmFormModal
         open={editing !== null}
@@ -180,6 +211,6 @@ export function FarmsPage() {
           </Button>
         </div>
       </Modal>
-    </main>
+    </div>
   )
 }

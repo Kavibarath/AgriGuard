@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
@@ -35,12 +36,37 @@ const schema = z
 type FormValues = z.input<typeof schema>
 type Limits = Omit<z.output<typeof schema>, 'productId' | 'cropId'>
 
-const limitFields: { name: keyof Limits; label: string; hint: string; step: string }[] = [
-  { name: 'preHarvestIntervalDays', label: 'Pre-harvest interval (days)', hint: 'V5 — no harvest sooner than this after spraying.', step: '1' },
-  { name: 'maxApplicationsPerCycle', label: 'Applications per crop cycle', hint: 'V6 — seasonal limit for this active ingredient.', step: '1' },
-  { name: 'minDaysBetweenApplications', label: 'Days between applications', hint: 'V7 — resistance management.', step: '1' },
-  { name: 'rainfastHours', label: 'Rainfast time (hours)', hint: 'V8 — dry hours needed after spraying.', step: '1' },
-  { name: 'reEntryIntervalHours', label: 'Re-entry interval (hours)', hint: 'Printed on the prescription.', step: '1' },
+/** The limits, grouped by what they protect. Each group says which validator rule reads it. */
+const limitGroups: {
+  title: string
+  rules: string
+  explain: string
+  fields: { name: keyof Limits; label: string; hint: string; unit: string }[]
+}[] = [
+  {
+    title: 'Harvest safety',
+    rules: 'V5',
+    explain: 'Residues must fall below the legal limit before the crop is picked.',
+    fields: [{ name: 'preHarvestIntervalDays', label: 'Pre-harvest interval (days)', hint: 'No harvest sooner than this after spraying.', unit: 'days' }],
+  },
+  {
+    title: 'Resistance management',
+    rules: 'V6, V7',
+    explain: 'Limits how often one active ingredient is used, so pests do not adapt to it.',
+    fields: [
+      { name: 'maxApplicationsPerCycle', label: 'Applications per crop cycle', hint: 'Seasonal limit for this active ingredient.', unit: 'times' },
+      { name: 'minDaysBetweenApplications', label: 'Days between applications', hint: 'Minimum gap between two sprays of it.', unit: 'days' },
+    ],
+  },
+  {
+    title: 'Weather and workers',
+    rules: 'V8',
+    explain: 'The spray must dry before rain, and people stay out while it is fresh.',
+    fields: [
+      { name: 'rainfastHours', label: 'Rainfast time (hours)', hint: 'Dry hours needed after spraying (V8).', unit: 'hours' },
+      { name: 'reEntryIntervalHours', label: 'Re-entry interval (hours)', hint: 'Printed on the prescription.', unit: 'hours' },
+    ],
+  },
 ]
 
 /**
@@ -101,6 +127,7 @@ export function RuleFormModal({ open, onClose, rule }: { open: boolean; onClose:
     <Modal
       open={open}
       onClose={close}
+      size="lg"
       title={rule ? `${rule.productName} on ${rule.cropName}` : 'Approve a product for a crop'}
       description="Saved limits apply to the very next proposal the validator checks."
     >
@@ -128,36 +155,41 @@ export function RuleFormModal({ open, onClose, rule }: { open: boolean; onClose:
           </div>
         )}
 
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-stone-800">Dose per hectare{unit && ` (${unit}/ha)`} — V3</legend>
+        <RuleGroup title="Dose" rules="V3" explain="The proposal's dose per hectare must sit inside this range.">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Minimum dose" type="number" step="any" min={0} error={errors.minDosePerHectare?.message} {...register('minDosePerHectare')} />
-            <Field label="Maximum dose" type="number" step="any" min={0} error={errors.maxDosePerHectare?.message} {...register('maxDosePerHectare')} />
+            <Field label="Minimum dose" unit={unit ? `${unit}/ha` : 'per ha'} type="number" step="any" min={0} error={errors.minDosePerHectare?.message} {...register('minDosePerHectare')} />
+            <Field label="Maximum dose" unit={unit ? `${unit}/ha` : 'per ha'} type="number" step="any" min={0} error={errors.maxDosePerHectare?.message} {...register('maxDosePerHectare')} />
           </div>
-        </fieldset>
+        </RuleGroup>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {limitFields.map((f) => (
-            <Field key={f.name} label={f.label} hint={f.hint} type="number" step={f.step} min={0} error={errors[f.name]?.message} {...register(f.name)} />
-          ))}
-        </div>
+        {limitGroups.map((group) => (
+          <RuleGroup key={group.title} title={group.title} rules={group.rules} explain={group.explain}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {group.fields.map((f) => (
+                <Field key={f.name} label={f.label} hint={f.hint} unit={f.unit} type="number" step="1" min={0} error={errors[f.name]?.message} {...register(f.name)} />
+              ))}
+            </div>
+          </RuleGroup>
+        ))}
 
-        <div className="space-y-2 text-sm text-stone-800">
-          <label className="flex items-start gap-2">
-            <input type="checkbox" className="mt-0.5 size-4 accent-brand-600" {...register('isActive')} />
-            <span>
-              <span className="font-medium">Approved (active)</span>
-              <span className="block text-xs text-stone-500">Untick to withdraw the approval: proposals fail V2 until it is ticked again.</span>
-            </span>
-          </label>
-          <label className="flex items-start gap-2">
-            <input type="checkbox" className="mt-0.5 size-4 accent-brand-600" {...register('isRestricted')} />
-            <span>
-              <span className="font-medium">Restricted use</span>
-              <span className="block text-xs text-stone-500">V10 — needs a permit the system cannot yet verify, so proposals are rejected.</span>
-            </span>
-          </label>
-        </div>
+        <RuleGroup title="Status" rules="V2, V10" explain="Whether the product may be proposed for this crop at all.">
+          <div className="space-y-2 text-sm text-stone-800">
+            <label className="flex items-start gap-2">
+              <input type="checkbox" className="mt-0.5 size-4 accent-brand-600" {...register('isActive')} />
+              <span>
+                <span className="font-medium">Approved (active)</span>
+                <span className="block text-xs text-stone-600">Untick to withdraw the approval: proposals fail V2 until it is ticked again.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input type="checkbox" className="mt-0.5 size-4 accent-brand-600" {...register('isRestricted')} />
+              <span>
+                <span className="font-medium">Restricted use</span>
+                <span className="block text-xs text-stone-600">V10 — needs a permit the system cannot yet verify, so proposals are rejected.</span>
+              </span>
+            </label>
+          </div>
+        </RuleGroup>
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={close}>
@@ -169,5 +201,18 @@ export function RuleFormModal({ open, onClose, rule }: { open: boolean; onClose:
         </div>
       </form>
     </Modal>
+  )
+}
+
+/** One group of limits: its name, the rules that read it, and what it protects. */
+function RuleGroup({ title, rules, explain, children }: { title: string; rules: string; explain: string; children: ReactNode }) {
+  return (
+    <fieldset className="rounded-lg border border-border-subtle bg-surface-sunken/50 p-3">
+      <legend className="px-1 text-sm font-semibold text-stone-900">
+        {title} <span className="ml-1 rounded bg-surface-inset px-1.5 py-0.5 text-xs font-bold text-stone-700 tabular-nums">{rules}</span>
+      </legend>
+      <p className="mb-2 text-xs text-stone-600">{explain}</p>
+      {children}
+    </fieldset>
   )
 }

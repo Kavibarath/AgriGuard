@@ -1,11 +1,18 @@
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { FilterBar } from '@/components/layout/FilterBar'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Clipboard, Workflow } from '@/components/icons'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { DataTable, Pagination, type Column } from '@/components/ui/DataTable'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Field } from '@/components/ui/field'
 import { SelectField } from '@/components/ui/select'
+import { StatTile } from '@/components/ui/StatTile'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { caseStatusTone, runStatusTone, severityTone } from '@/components/ui/status-tones'
+import { cn } from '@/lib/utils'
+import { AgentGlyph } from './agent-identity'
+import { workingAgent } from './agents'
 import { localDate } from './format'
 import { useCaseQueue } from './queries'
 import { caseStatusLabels, runStatusLabels, type CaseStatus, type CaseSummary } from './types'
@@ -68,7 +75,7 @@ export function AgentRunsPage() {
       header: 'Farmer · plot',
       render: (c) => (
         <span>
-          {c.farmerName} <span className="text-stone-500">· {c.plotCode}</span>
+          {c.farmerName} <span className="text-stone-600">· {c.plotCode}</span>
         </span>
       ),
     },
@@ -89,12 +96,17 @@ export function AgentRunsPage() {
     {
       key: 'run',
       header: 'Agent run',
-      render: (c) =>
-        c.latestRunStatus ? (
-          <StatusBadge label={runStatusLabels[c.latestRunStatus]} tone={runStatusTone[c.latestRunStatus]} />
-        ) : (
-          <span className="text-stone-500">None yet</span>
-        ),
+      render: (c) => {
+        if (!c.latestRunStatus) return <span className="text-stone-600">None yet</span>
+        const agent = workingAgent[c.latestRunStatus]
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            {agent && <AgentGlyph role={agent} size="sm" />}
+            <StatusBadge label={runStatusLabels[c.latestRunStatus]} tone={runStatusTone[c.latestRunStatus]} />
+            {agent && <span className="sr-only">({agent} agent working)</span>}
+          </span>
+        )
+      },
     },
     {
       key: 'createdAt',
@@ -107,18 +119,19 @@ export function AgentRunsPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <header className="space-y-1">
-        <Link to="/dashboard" className="text-sm text-stone-500 hover:text-stone-800">
-          ← Dashboard
-        </Link>
-        <h1 className="text-2xl font-semibold text-stone-900">Agent runs</h1>
-        <p className="text-sm text-stone-600">
-          Crop-health cases in your district, with the agent's latest run. Open a case to review its evidence and decide.
-        </p>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Agent runs"
+        description="Crop-health cases in your district with the agents' latest run. Open one to read its evidence and decide."
+      />
 
-      <div className="grid gap-3 sm:grid-cols-[14rem_18rem]">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {tiles.map((tile) => (
+          <ViewTile key={tile.value} {...tile} current={view.value === tile.value} />
+        ))}
+      </div>
+
+      <FilterBar className="sm:grid-cols-[14rem_20rem]">
         <SelectField label="Show" value={view.value} onChange={(event) => updateParams({ view: event.target.value })}>
           {views.map((v) => (
             <option key={v.value} value={v.value}>
@@ -133,7 +146,7 @@ export function AgentRunsPage() {
           defaultValue={query.search ?? ''}
           onChange={(event) => updateParams({ search: event.target.value || undefined })}
         />
-      </div>
+      </FilterBar>
 
       <AsyncBoundary isPending={cases.isPending} error={cases.error} onRetry={cases.refetch} label="Loading cases">
         {cases.data?.items.length === 0 ? (
@@ -165,6 +178,30 @@ export function AgentRunsPage() {
           </div>
         )}
       </AsyncBoundary>
-    </main>
+    </div>
+  )
+}
+
+/** The four views an agronomist moves between, counted. Each is a link to that view. */
+const tiles: { value: string; status: CaseStatus; label: string; detail: string; icon: 'queue' | 'case' }[] = [
+  { value: 'PendingApproval', status: 'PendingApproval', label: 'Awaiting your decision', detail: 'Passed the safety rules', icon: 'queue' },
+  { value: 'AgentProcessing', status: 'AgentProcessing', label: 'Agents working', detail: 'Planning, diagnosing or validating', icon: 'queue' },
+  { value: 'AwaitingManualReview', status: 'AwaitingManualReview', label: 'In manual review', detail: 'Escalated or sent back', icon: 'case' },
+  { value: 'Prescribed', status: 'Prescribed', label: 'Prescribed', detail: 'Approved and issued', icon: 'case' },
+]
+
+function ViewTile({ value, status, label, detail, icon, current }: (typeof tiles)[number] & { current: boolean }) {
+  const count = useCaseQueue({ status, pageSize: 1 })
+  return (
+    <Link to={`?view=${value}`} replace aria-current={current ? 'true' : undefined} className="block rounded-xl">
+      <StatTile
+        interactive
+        label={label}
+        value={count.data?.totalCount ?? '—'}
+        detail={detail}
+        icon={icon === 'queue' ? <Workflow /> : <Clipboard />}
+        className={cn(current && 'border-brand-600 ring-1 ring-brand-600')}
+      />
+    </Link>
   )
 }

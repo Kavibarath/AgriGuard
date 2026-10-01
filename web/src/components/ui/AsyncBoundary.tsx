@@ -24,7 +24,7 @@ export function AsyncBoundary({
 }) {
   if (isPending) {
     return (
-      <div className="flex items-center justify-center gap-3 py-12 text-sm text-stone-600">
+      <div className="flex items-center justify-center gap-3 rounded-xl border border-border-subtle bg-surface-card py-10 text-sm text-stone-600">
         <Spinner label={label} />
         {label}…
       </div>
@@ -36,7 +36,7 @@ export function AsyncBoundary({
       <Alert tone="error" title="Could not load this">
         <p>{userMessage(error)}</p>
         {onRetry && (
-          <Button variant="secondary" className="mt-2 h-8" onClick={onRetry}>
+          <Button variant="secondary" size="sm" className="mt-2" onClick={onRetry}>
             Try again
           </Button>
         )}

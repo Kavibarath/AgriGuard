@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { centreOf, fitZoom, project, TILE_SIZE, type LatLng, type Point } from '@/lib/geo'
 import { cn } from '@/lib/utils'
 
-export type PinTone = 'danger' | 'warning' | 'active' | 'neutral'
+export type PinTone = 'danger' | 'warning' | 'active' | 'neutral' | 'success' | 'severe'
 
 export interface MapPin {
   id: string
@@ -13,15 +13,23 @@ export interface MapPin {
   tone: PinTone
   /** A filled dot for a report; a hollow ring for a reference point such as a plot's centre. */
   variant?: 'dot' | 'ring'
+  /** Larger pins for heavier weight, such as a district under severe pressure. */
+  size?: 'sm' | 'md' | 'lg'
+  /** The one in focus: lifted above the others with a canopy ring and a deeper shadow. */
+  selected?: boolean
   href?: string
 }
 
 const toneClasses: Record<PinTone, string> = {
-  danger: 'bg-red-600 ring-red-600',
-  warning: 'bg-amber-500 ring-amber-500',
+  danger: 'bg-danger ring-danger',
+  warning: 'bg-warning ring-warning',
   active: 'bg-brand-600 ring-brand-600',
   neutral: 'bg-stone-500 ring-stone-500',
+  success: 'bg-success ring-success',
+  severe: 'bg-danger-800 ring-danger-800',
 }
+
+const pinSizes = { sm: 'size-3', md: 'size-4', lg: 'size-6' } as const
 
 const MIN_ZOOM = 3
 const MAX_ZOOM = 18
@@ -102,7 +110,7 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
       ref={containerRef}
       role="region"
       aria-label={label}
-      className="relative touch-none select-none overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
+      className="relative touch-none select-none overflow-hidden rounded-xl border border-border-subtle bg-surface-inset"
       style={{ height }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -128,7 +136,9 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
           const at = project(pin.position, zoom)
           const style = { left: at.x - origin.x, top: at.y - origin.y }
           const dot = cn(
-            'absolute block size-4 -translate-x-1/2 -translate-y-1/2 rounded-full shadow ring-2',
+            'absolute block -translate-x-1/2 -translate-y-1/2 rounded-full shadow ring-2',
+            pinSizes[pin.size ?? 'md'],
+            pin.selected && 'z-10 shadow-lifted outline-4 outline-offset-2 outline-brand-600/70',
             pin.variant === 'ring' ? 'ring-[3px]' : 'border-2 border-white',
             toneClasses[pin.tone],
             // Last, so tailwind-merge lets it replace the tone's fill: a ring is hollow.
@@ -137,7 +147,7 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
           return (
             <li key={pin.id}>
               {pin.href ? (
-                <Link to={pin.href} aria-label={pin.label} title={pin.label} className={cn(dot, 'focus-visible:outline-none focus-visible:ring-4')} style={style} />
+                <Link to={pin.href} aria-label={pin.label} title={pin.label} className={cn(dot, 'hover:scale-110')} style={style} />
               ) : (
                 <span role="img" aria-label={pin.label} title={pin.label} className={dot} style={style} />
               )}
@@ -146,16 +156,16 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
         })}
       </ul>
 
-      <div className="absolute right-2 top-2 flex flex-col overflow-hidden rounded-md border border-stone-300 bg-white shadow-sm">
-        <button type="button" aria-label="Zoom in" className="size-8 text-lg leading-none hover:bg-stone-50 disabled:text-stone-300" disabled={zoom >= MAX_ZOOM} onClick={() => changeZoom(1)}>
+      <div className="absolute top-2 right-2 flex flex-col overflow-hidden rounded-md border border-border-strong bg-surface-card shadow-raised">
+        <button type="button" aria-label="Zoom in" className="size-8 text-lg leading-none hover:bg-surface-sunken disabled:text-stone-400" disabled={zoom >= MAX_ZOOM} onClick={() => changeZoom(1)}>
           +
         </button>
-        <button type="button" aria-label="Zoom out" className="size-8 border-t border-stone-300 text-lg leading-none hover:bg-stone-50 disabled:text-stone-300" disabled={zoom <= MIN_ZOOM} onClick={() => changeZoom(-1)}>
+        <button type="button" aria-label="Zoom out" className="size-8 border-t border-border-strong text-lg leading-none hover:bg-surface-sunken disabled:text-stone-400" disabled={zoom <= MIN_ZOOM} onClick={() => changeZoom(-1)}>
           −
         </button>
       </div>
 
-      <p className="absolute bottom-0 right-0 bg-white/80 px-1.5 text-[11px] text-stone-700">
+      <p className="absolute right-0 bottom-0 rounded-tl-md bg-surface-card/85 px-1.5 text-xs text-stone-700">
         ©{' '}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">
           OpenStreetMap

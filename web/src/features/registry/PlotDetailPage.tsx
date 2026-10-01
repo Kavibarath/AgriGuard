@@ -1,4 +1,6 @@
 import { Link, useParams } from 'react-router'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { TileMap } from '@/components/map/TileMap'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { plotStatusTone } from '@/components/ui/status-tones'
@@ -23,8 +25,8 @@ export function PlotDetailPage() {
   const canEdit = user?.role === 'CoopAdministrator' || (farm.data ? farm.data.farmerId === user?.id : false)
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <nav className="text-sm">
+    <div className="space-y-4 pb-4">
+      <nav className="pt-4 text-sm">
         {plot.data ? (
           <Link to={`/farms/${plot.data.farmId}`} className="text-brand-700 hover:underline">
             ← {plot.data.farmName}
@@ -39,33 +41,45 @@ export function PlotDetailPage() {
       <AsyncBoundary isPending={plot.isPending} error={plot.error} onRetry={plot.refetch} label="Loading plot">
         {plot.data && (
           <>
-            <header className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h1 className="text-2xl font-semibold text-stone-900">
+            <PageHeader
+              className="pt-1"
+              title={
+                <>
                   {plot.data.plotCode}
                   {plot.data.name && <span className="font-normal text-stone-600"> · {plot.data.name}</span>}
-                </h1>
-                <p className="text-sm text-stone-600">
+                </>
+              }
+              meta={<StatusBadge label={plot.data.status} tone={plotStatusTone[plot.data.status]} className="text-sm" />}
+              description={
+                <>
                   {plot.data.farmName}
-                  {farm.data && `, ${farm.data.districtName}`} · {plot.data.areaHectares.toFixed(3)} ha ·{' '}
-                  {soilLabels[plot.data.soilType]} · {plot.data.latitude.toFixed(4)}, {plot.data.longitude.toFixed(4)}
-                </p>
-              </div>
-              <StatusBadge label={plot.data.status} tone={plotStatusTone[plot.data.status]} />
-            </header>
+                  {farm.data && `, ${farm.data.districtName}`} · {plot.data.areaHectares.toFixed(3)} ha · {soilLabels[plot.data.soilType]} ·{' '}
+                  {plot.data.latitude.toFixed(4)}, {plot.data.longitude.toFixed(4)}
+                </>
+              }
+            />
 
-            <div className="grid gap-6 lg:grid-cols-[2fr_3fr]">
-              <div className="space-y-2">
-                <h2 className="text-sm font-medium uppercase tracking-wide text-stone-500">Crop cycle</h2>
-                <CropCyclePanel plot={plot.data} canEdit={canEdit} />
+            <div className="grid items-start gap-4 xl:grid-cols-12">
+              <div className="space-y-4 xl:col-span-4">
+                <div className="space-y-2">
+                  <h2 className="font-display text-xl font-semibold text-stone-900">Crop cycle</h2>
+                  <CropCyclePanel plot={plot.data} canEdit={canEdit} />
+                </div>
+                <TileMap
+                  label={`Map: plot ${plot.data.plotCode}`}
+                  height={220}
+                  pins={[{ id: plot.data.id, position: { lat: plot.data.latitude, lng: plot.data.longitude }, label: `Plot ${plot.data.plotCode}, registered centre`, tone: 'active' }]}
+                />
               </div>
-              <SafetyProfilePanel plotId={plotId} />
+              <div className="xl:col-span-8">
+                <SafetyProfilePanel plotId={plotId} />
+              </div>
             </div>
 
             <TreatmentHistory plotId={plotId} />
           </>
         )}
       </AsyncBoundary>
-    </main>
+    </div>
   )
 }

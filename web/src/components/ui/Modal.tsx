@@ -11,7 +11,10 @@ export function Modal({
   title,
   description,
   children,
+  size = 'md',
 }: {
+  /** `lg` for forms with grouped fields, such as the rules editor. */
+  size?: 'md' | 'lg'
   open: boolean
   onClose: () => void
   title: string
@@ -55,17 +58,17 @@ export function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Clicking the backdrop dismisses, matching the Escape key. */}
-      <div className="absolute inset-0 bg-stone-900/40" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-brand-900/45" onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className="relative z-10 w-full max-w-md space-y-4 rounded-lg border border-stone-200 bg-white p-5 shadow-lg"
+        className={`relative z-10 max-h-[calc(100vh-2rem)] w-full overflow-y-auto ${size === 'lg' ? 'max-w-2xl' : 'max-w-md'} space-y-4 rounded-xl border border-border-subtle bg-surface-card p-5 shadow-overlay`}
       >
         <header className="space-y-1">
-          <h2 id={titleId} className="text-lg font-semibold text-stone-900">
+          <h2 id={titleId} className="font-display text-xl font-semibold text-stone-900">
             {title}
           </h2>
           {description && (

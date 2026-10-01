@@ -1,4 +1,6 @@
 import { Link, useParams } from 'react-router'
+import { Panel, PageHeader, PanelHeader } from '@/components/layout/PageHeader'
+import { Leaf } from '@/components/icons'
 import { Alert } from '@/components/ui/alert'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { Spinner } from '@/components/ui/Spinner'
@@ -33,33 +35,30 @@ export function AgentRunPage() {
   const ended = run.data?.status === 'Failed' || run.data?.status === 'Rejected' || run.data?.status === 'TimedOut'
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <Link to="/agent-runs" className="text-sm text-stone-500 hover:text-stone-800">
-        ← Agent runs
-      </Link>
-
+    <div className="space-y-4 pb-4">
       <AsyncBoundary isPending={run.isPending} error={run.error} onRetry={run.refetch} label="Loading the run">
         {run.data && (
           <>
-            <header className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h1 className="text-2xl font-semibold text-stone-900">
+            <PageHeader
+              title={
+                <>
                   Case{' '}
-                  <Link to={`/cases/${run.data.caseId}`} className="text-brand-700 hover:underline">
+                  <Link to={`/cases/${run.data.caseId}`} className="rounded-sm text-brand-700 underline decoration-brand-200 underline-offset-4 hover:decoration-brand-600">
                     {run.data.caseReferenceNo}
                   </Link>
-                </h1>
-                <p className="text-sm text-stone-600">{run.data.objective}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                {working && (
-                  <span className="flex items-center gap-2 text-sm text-stone-600">
-                    <Spinner label="Agent working" /> Updating live
+                </>
+              }
+              meta={<StatusBadge label={runStatusLabels[run.data.status]} tone={runStatusTone[run.data.status]} className="text-sm" />}
+              description={run.data.objective}
+              actions={
+                working ? (
+                  <span className="flex items-center gap-2 rounded-full bg-info-50 px-3 py-1.5 text-sm font-medium text-info-800 ring-1 ring-info-200">
+                    <Spinner label="Agent working" className="size-4" /> Updating live
                   </span>
-                )}
-                <StatusBadge label={runStatusLabels[run.data.status]} tone={runStatusTone[run.data.status]} className="text-sm" />
-              </div>
-            </header>
+                ) : undefined
+              }
+              className="pb-2"
+            />
 
             {run.data.status === 'Escalated' && (
               <Alert tone="warning" title="Handed to an agronomist">
@@ -73,89 +72,93 @@ export function AgentRunPage() {
               </Alert>
             )}
 
-            <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-              <div className="space-y-6">
+            {/*
+              Evidence on the left (the case, the triage, the safety report); on the right what is
+              being asked for and the decision, then how the agents got there.
+            */}
+            <div className="grid items-start gap-4 xl:grid-cols-12">
+              <div className="space-y-4 xl:col-span-8">
                 {cropCase.data && <CaseContext detail={cropCase.data} />}
+                {run.data.triage && <TriageCard triage={run.data.triage} />}
+                {run.data.verdict && <VerdictCard verdict={run.data.verdict} review={run.data.safetyReview} />}
+              </div>
+              <div className="space-y-4 xl:col-span-4">
                 {run.data.prescription && <PrescriptionCard prescription={run.data.prescription} />}
+                {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
                 {run.data.status === 'PendingApproval' && (
                   <DecisionPanel run={run.data} canDecide={can(user?.role, 'CanApprovePrescriptions')} />
                 )}
-                {run.data.triage && <TriageCard triage={run.data.triage} />}
-                {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
-                {run.data.verdict && <VerdictCard verdict={run.data.verdict} review={run.data.safetyReview} />}
-              </div>
-              <div className="space-y-6">
                 <RunSteps run={run.data} />
-                <RunTimeline events={events.data?.items ?? []} loading={events.isPending} />
               </div>
             </div>
+
+            <RunTimeline events={events.data?.items ?? []} loading={events.isPending} />
           </>
         )}
       </AsyncBoundary>
-    </main>
+    </div>
   )
 }
 
 /** The case as the farmer reported it. The note is untrusted input and is shown as plain text. */
 function CaseContext({ detail }: { detail: CaseDetail }) {
   return (
-    <section aria-labelledby="case-heading" className="space-y-3 rounded-lg border border-stone-200 bg-white p-4">
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <h2 id="case-heading" className="font-medium text-stone-900">
-          The case
-        </h2>
-        <div className="flex gap-2">
-          <StatusBadge label={detail.severity} tone={severityTone[detail.severity]} />
-          <StatusBadge label={caseStatusLabels[detail.status]} tone={caseStatusTone[detail.status]} />
-        </div>
-      </header>
+    <Panel aria-labelledby="case-heading">
+      <PanelHeader
+        id="case-heading"
+        title="The case"
+        description="As the farmer reported it from the field."
+        aside={
+          <div className="flex gap-2">
+            <StatusBadge label={detail.severity} tone={severityTone[detail.severity]} />
+            <StatusBadge label={caseStatusLabels[detail.status]} tone={caseStatusTone[detail.status]} />
+          </div>
+        }
+      />
 
-      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <div>
-          <dt className="text-stone-500">Farmer</dt>
-          <dd className="font-medium text-stone-900">{detail.farmerName}</dd>
-        </div>
-        <div>
-          <dt className="text-stone-500">Plot</dt>
-          <dd className="font-medium text-stone-900">
-            {detail.plotCode} · {detail.plotAreaHectares} ha
-          </dd>
-        </div>
-        <div>
-          <dt className="text-stone-500">Crop</dt>
-          <dd className="font-medium text-stone-900">
-            {detail.cropName} ({detail.stage})
-          </dd>
-        </div>
-        <div>
-          <dt className="text-stone-500">Reported</dt>
-          <dd className="font-medium text-stone-900">{localDate(detail.createdAt)}</dd>
-        </div>
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border-subtle bg-border-subtle text-sm sm:grid-cols-4">
+        <Fact label="Farmer" value={detail.farmerName} />
+        <Fact label="Plot" value={`${detail.plotCode} · ${detail.plotAreaHectares} ha`} />
+        <Fact label="Crop" value={`${detail.cropName} (${detail.stage})`} />
+        <Fact label="Reported" value={localDate(detail.createdAt)} />
       </dl>
 
-      <div>
-        <h3 className="text-xs font-medium uppercase tracking-wide text-stone-500">Symptoms</h3>
-        <ul className="mt-1.5 flex flex-wrap gap-1.5">
-          {detail.symptoms.map((symptom) => (
-            <li key={symptom.code} className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-700">
-              {symptom.label}
-            </li>
-          ))}
-        </ul>
+      <div className="mt-3 grid gap-4 md:grid-cols-[1fr_auto]">
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-stone-800">Symptoms</h3>
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {detail.symptoms.map((symptom) => (
+                <li key={symptom.code} className="inline-flex items-center gap-1 rounded-full bg-earth-50 px-2.5 py-1 text-xs font-medium text-earth-700 ring-1 ring-earth-200 ring-inset">
+                  <Leaf size={14} className="text-earth-500" />
+                  {symptom.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {detail.farmerNote && (
+            <figure>
+              <figcaption className="text-sm font-semibold text-stone-800">
+                Farmer's note <span className="font-normal text-stone-600">(as typed — not verified)</span>
+              </figcaption>
+              <blockquote className="mt-1 border-l-2 border-earth-300 pl-3 text-sm break-words whitespace-pre-wrap text-stone-800">
+                {detail.farmerNote}
+              </blockquote>
+            </figure>
+          )}
+        </div>
+        <CasePhotos caseId={detail.id} photos={detail.photos ?? []} />
       </div>
+    </Panel>
+  )
+}
 
-      <CasePhotos caseId={detail.id} photos={detail.photos ?? []} />
-
-      {detail.farmerNote && (
-        <figure>
-          <figcaption className="text-xs font-medium uppercase tracking-wide text-stone-500">
-            Farmer's note <span className="normal-case tracking-normal text-stone-400">(as typed — not verified)</span>
-          </figcaption>
-          <blockquote className="mt-1 whitespace-pre-wrap break-words border-l-2 border-stone-300 pl-3 text-sm text-stone-700">
-            {detail.farmerNote}
-          </blockquote>
-        </figure>
-      )}
-    </section>
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-surface-card px-3 py-2">
+      <dt className="text-xs text-stone-600">{label}</dt>
+      <dd className="mt-0.5 font-semibold text-stone-900">{value}</dd>
+    </div>
   )
 }

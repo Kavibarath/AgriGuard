@@ -1,4 +1,5 @@
 import { createBrowserRouter, createMemoryRouter, Navigate, type RouteObject } from 'react-router'
+import { AppShell } from '@/components/layout/AppShell'
 import { MessagePage } from '@/components/MessagePage'
 import { AgentRunPage } from '@/features/agent-runs/AgentRunPage'
 import { AgentRunsPage } from '@/features/agent-runs/AgentRunsPage'
@@ -20,50 +21,60 @@ import { RulesPage } from '@/features/rules/RulesPage'
 export const routes: RouteObject[] = [
   { path: '/', element: <Navigate to="/dashboard" replace /> },
   { path: '/login', element: <LoginPage /> },
+  // Development only: the tokens and components in every state (docs/design/TOKENS.md).
+  ...(import.meta.env.DEV
+    ? [{ path: '/design-system', lazy: async () => ({ Component: (await import('@/features/design-system/DesignSystemPage')).default }) }]
+    : []),
   {
     element: <ProtectedRoute />,
     children: [
-      { path: '/dashboard', element: <DashboardPage /> },
-      // Component D's outbreak view is an aggregate with no farmer in it: every signed-in role.
-      { path: '/intelligence', element: <IntelligencePage /> },
-      // Component A. The OwnsFarm policy admits farmers, agronomists and administrators;
-      // the API decides which rows each of them actually sees.
       {
-        element: <ProtectedRoute policy="OwnsFarm" />,
+        // The console frame: sidebar, top bar and the page column, around every signed-in page.
+        element: <AppShell />,
         children: [
-          { path: '/farms', element: <FarmsPage /> },
-          { path: '/farms/:farmId', element: <FarmDetailPage /> },
-          { path: '/plots/:plotId', element: <PlotDetailPage /> },
-          // Component B. Viewing is open to the same roles (the API scopes the rows); deciding
-          // is Field Agronomist only, enforced by the API and explained in the decision panel.
-          { path: '/cases', element: <CasesPage /> },
-          { path: '/cases/:caseId', element: <CaseDetailPage /> },
-          { path: '/agent-runs', element: <AgentRunsPage /> },
-          { path: '/agent-runs/:runId', element: <AgentRunPage /> },
-          // Component D. Forecasts and bookings are scoped by the API like the registry.
-          { path: '/harvest', element: <HarvestPage /> },
-          { path: '/collection-planner', element: <CollectionPlannerPage /> },
+          { path: '/dashboard', element: <DashboardPage /> },
+          // Component D's outbreak view is an aggregate with no farmer in it: every signed-in role.
+          { path: '/intelligence', element: <IntelligencePage /> },
+          // Component A. The OwnsFarm policy admits farmers, agronomists and administrators;
+          // the API decides which rows each of them actually sees.
+          {
+            element: <ProtectedRoute policy="OwnsFarm" />,
+            children: [
+              { path: '/farms', element: <FarmsPage /> },
+              { path: '/farms/:farmId', element: <FarmDetailPage /> },
+              { path: '/plots/:plotId', element: <PlotDetailPage /> },
+              // Component B. Viewing is open to the same roles (the API scopes the rows); deciding
+              // is Field Agronomist only, enforced by the API and explained in the decision panel.
+              { path: '/cases', element: <CasesPage /> },
+              { path: '/cases/:caseId', element: <CaseDetailPage /> },
+              { path: '/agent-runs', element: <AgentRunsPage /> },
+              { path: '/agent-runs/:runId', element: <AgentRunPage /> },
+              // Component D. Forecasts and bookings are scoped by the API like the registry.
+              { path: '/harvest', element: <HarvestPage /> },
+              { path: '/collection-planner', element: <CollectionPlannerPage /> },
+            ],
+          },
+          // Component C. A dealer's own shelf and orders; the API limits every row to their shop.
+          {
+            element: <ProtectedRoute policy="ManagesInventory" />,
+            children: [
+              { path: '/inventory', element: <InventoryPage /> },
+              { path: '/orders', element: <OrdersPage /> },
+            ],
+          },
+          // The regulatory rules table: Co-op Administrator only.
+          {
+            element: <ProtectedRoute policy="AdministersRules" />,
+            children: [{ path: '/rules', element: <RulesPage /> }],
+          },
+          // Feature areas are added by their owners; until then the dashboard links land here.
+          {
+            path: '/forbidden',
+            element: <MessagePage title="Not available for your role">This area needs a different role. If you think that is wrong, contact the co-op administrator.</MessagePage>,
+          },
+          { path: '*', element: <MessagePage title="Page not found">That page does not exist yet.</MessagePage> },
         ],
       },
-      // Component C. A dealer's own shelf and orders; the API limits every row to their shop.
-      {
-        element: <ProtectedRoute policy="ManagesInventory" />,
-        children: [
-          { path: '/inventory', element: <InventoryPage /> },
-          { path: '/orders', element: <OrdersPage /> },
-        ],
-      },
-      // The regulatory rules table: Co-op Administrator only.
-      {
-        element: <ProtectedRoute policy="AdministersRules" />,
-        children: [{ path: '/rules', element: <RulesPage /> }],
-      },
-      // Feature areas are added by their owners; until then the dashboard links land here.
-      {
-        path: '/forbidden',
-        element: <MessagePage title="Not available for your role">This area needs a different role. If you think that is wrong, contact the co-op administrator.</MessagePage>,
-      },
-      { path: '*', element: <MessagePage title="Page not found">That page does not exist yet.</MessagePage> },
     ],
   },
 ]

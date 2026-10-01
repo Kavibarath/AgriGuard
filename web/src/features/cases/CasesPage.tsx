@@ -1,4 +1,6 @@
 import { Link, useSearchParams } from 'react-router'
+import { FilterBar } from '@/components/layout/FilterBar'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { DataTable, Pagination, type Column } from '@/components/ui/DataTable'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -75,11 +77,12 @@ export function CasesPage() {
     { key: 'createdAt', header: 'Reported', sortable: true, secondary: true, render: (c) => <span className="whitespace-nowrap">{formatDateTime(c.createdAt)}</span> },
     {
       key: 'farmer',
-      header: 'Farmer · plot',
+      header: 'Farmer and plot',
       render: (c) => (
-        <span>
-          {c.farmerName} <span className="text-stone-500">· {c.plotCode}</span>
-        </span>
+        <div className="whitespace-nowrap">
+          <p>{c.farmerName}</p>
+          <p className="text-xs text-stone-600">{c.plotCode}</p>
+        </div>
       ),
     },
     {
@@ -87,9 +90,9 @@ export function CasesPage() {
       header: 'Crop',
       secondary: true,
       render: (c) => (
-        <div>
+        <div className="whitespace-nowrap">
           <p>{c.cropName}</p>
-          <p className="text-xs text-stone-500">{c.districtName}</p>
+          <p className="text-xs text-stone-600">{c.districtName}</p>
         </div>
       ),
     },
@@ -101,8 +104,8 @@ export function CasesPage() {
       render: (c) => (
         <div className="space-y-0.5">
           <StatusBadge label={caseStatusLabels[c.status]} tone={caseStatusTone[c.status]} />
-          {c.latestRunStatus && c.latestRunStatus !== c.status && (
-            <p className="text-xs text-stone-500">
+          {c.latestRunStatus && runStatusLabels[c.latestRunStatus] !== caseStatusLabels[c.status] && (
+            <p className="text-xs text-stone-600">
               Agent: <StatusBadge label={runStatusLabels[c.latestRunStatus]} tone={runStatusTone[c.latestRunStatus]} className="px-1.5 py-0" />
             </p>
           )}
@@ -112,16 +115,14 @@ export function CasesPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <header className="space-y-1">
-        <Link to="/dashboard" className="text-sm text-stone-500 hover:text-stone-800">
-          ← Dashboard
-        </Link>
-        <h1 className="text-2xl font-semibold text-stone-900">Crop cases</h1>
-        <p className="text-sm text-stone-600">Problems farmers reported from the field, where they were standing when they did.</p>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Crop cases"
+        description="Problems farmers reported from the field, pinned where they stood when they reported them."
+        meta={cases.data ? <span className="text-sm text-stone-600 tabular-nums">{cases.data.totalCount} in view</span> : undefined}
+      />
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <FilterBar className="sm:grid-cols-2 lg:grid-cols-4">
         <SelectField label="Status" value={status ?? ''} onChange={(event) => updateParams({ status: event.target.value || undefined })}>
           <option value="">Any status</option>
           {statuses.map((s) => (
@@ -153,7 +154,7 @@ export function CasesPage() {
           defaultValue={query.search ?? ''}
           onChange={(event) => updateParams({ search: event.target.value || undefined })}
         />
-      </div>
+      </FilterBar>
 
       <AsyncBoundary isPending={cases.isPending} error={cases.error} onRetry={cases.refetch} label="Loading cases">
         {rows.length === 0 ? (
@@ -163,16 +164,22 @@ export function CasesPage() {
           />
         ) : (
           <div className="space-y-4">
-            <TileMap pins={pins} label={`Map of the ${rows.length} case${rows.length === 1 ? '' : 's'} on this page`} height={300} />
-            <p className="text-xs text-stone-500">Each dot is where the phone was when the problem was reported; its colour is the severity. Select one to open the case.</p>
-            <DataTable
-              caption="Crop cases"
-              columns={columns}
-              rows={rows}
-              rowKey={(c) => c.id}
-              sort={{ sortBy: query.sortBy, desc: query.desc }}
-              onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : 'false' })}
-            />
+            <div className="grid items-start gap-4 xl:grid-cols-12">
+              <div className="xl:col-span-8">
+                <DataTable
+                  caption="Crop cases"
+                  columns={columns}
+                  rows={rows}
+                  rowKey={(c) => c.id}
+                  sort={{ sortBy: query.sortBy, desc: query.desc }}
+                  onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : 'false' })}
+                />
+              </div>
+              <aside className="space-y-2 xl:sticky xl:top-20 xl:col-span-4">
+                <TileMap pins={pins} label={`Map of the ${rows.length} case${rows.length === 1 ? '' : 's'} on this page`} height={420} />
+                <p className="text-xs text-stone-600">Each dot is where the phone was when the problem was reported; its colour is the severity. Select one to open the case.</p>
+              </aside>
+            </div>
             <Pagination
               page={cases.data?.page ?? 1}
               totalPages={cases.data?.totalPages ?? 1}
@@ -182,6 +189,6 @@ export function CasesPage() {
           </div>
         )}
       </AsyncBoundary>
-    </main>
+    </div>
   )
 }

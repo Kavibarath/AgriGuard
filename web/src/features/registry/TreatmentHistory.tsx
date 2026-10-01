@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router'
+import { FilterBar } from '@/components/layout/FilterBar'
 import { Alert } from '@/components/ui/alert'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { DataTable, type Column } from '@/components/ui/DataTable'
@@ -62,7 +63,7 @@ export function TreatmentHistory({ plotId }: { plotId: string }) {
       render: (r) => (
         <div>
           <p className="font-medium text-stone-900">{r.productName}</p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-600">
             {r.activeIngredient}
             {r.resistanceGroup && ` · group ${r.resistanceGroup}`}
           </p>
@@ -76,7 +77,7 @@ export function TreatmentHistory({ plotId }: { plotId: string }) {
       render: (r) => (
         <div>
           <p>{r.cropName}</p>
-          <p className="text-xs text-stone-500">sown {shortDay(r.cycleSownDate)}</p>
+          <p className="text-xs text-stone-600">sown {shortDay(r.cycleSownDate)}</p>
         </div>
       ),
     },
@@ -88,7 +89,7 @@ export function TreatmentHistory({ plotId }: { plotId: string }) {
       render: (r) => (
         <div>
           <p>{formatQuantity(r.dosePerHectare, r.unit)}/ha</p>
-          <p className="text-xs text-stone-500">{formatQuantity(r.totalQuantity, r.unit)} total</p>
+          <p className="text-xs text-stone-600">{formatQuantity(r.totalQuantity, r.unit)} total</p>
         </div>
       ),
     },
@@ -98,7 +99,7 @@ export function TreatmentHistory({ plotId }: { plotId: string }) {
       render: (r) => (
         <div className="space-y-0.5">
           <StatusBadge label={r.status} tone={applicationStatusTone[r.status]} />
-          {r.prescriptionNo && <p className="text-xs text-stone-500">{r.prescriptionNo}</p>}
+          {r.prescriptionNo && <p className="text-xs text-stone-600">{r.prescriptionNo}</p>}
         </div>
       ),
     },
@@ -109,21 +110,21 @@ export function TreatmentHistory({ plotId }: { plotId: string }) {
         r.safeToHarvestFrom ? (
           <div>
             <p>{shortDay(r.safeToHarvestFrom)}</p>
-            <p className="text-xs text-stone-500">PHI {r.preHarvestIntervalDays} d</p>
+            <p className="text-xs text-stone-600">PHI {r.preHarvestIntervalDays} d</p>
           </div>
         ) : (
-          <span className="text-stone-500">{r.status === 'Cancelled' ? 'Not sprayed' : 'No rule on file'}</span>
+          <span className="text-stone-600">{r.status === 'Cancelled' ? 'Not sprayed' : 'No rule on file'}</span>
         ),
     },
   ]
 
   return (
     <section aria-labelledby="history-heading" className="space-y-3">
-      <h2 id="history-heading" className="text-sm font-medium uppercase tracking-wide text-stone-500">
+      <h2 id="history-heading" className="font-display text-xl font-semibold text-stone-900">
         Treatment history
       </h2>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <FilterBar className="sm:grid-cols-3 lg:grid-cols-[12rem_12rem_14rem]">
         <Field label="From" type="date" value={from ?? ''} max={to} onChange={(event) => updateParams({ from: event.target.value || undefined })} />
         <Field label="To" type="date" value={to ?? ''} min={from} onChange={(event) => updateParams({ to: event.target.value || undefined })} />
         <SelectField label="Status" value={view.value} onChange={(event) => updateParams({ status: event.target.value === 'all' ? undefined : event.target.value })}>
@@ -133,7 +134,7 @@ export function TreatmentHistory({ plotId }: { plotId: string }) {
             </option>
           ))}
         </SelectField>
-      </div>
+      </FilterBar>
 
       {rangeInvalid ? (
         <Alert tone="warning">The start date must be on or before the end date.</Alert>
@@ -142,19 +143,19 @@ export function TreatmentHistory({ plotId }: { plotId: string }) {
           {history.data && (
             <div className="space-y-4">
               {history.data.byActiveIngredient.length > 0 && (
-                <div className="rounded-lg border border-stone-200 bg-white p-4">
+                <div className="rounded-xl border border-border-subtle bg-surface-card p-4">
                   <h3 className="font-medium text-stone-900">
                     Sprays by active ingredient
-                    <span className="font-normal text-stone-500"> · {history.data.applications} counted, cancelled ones excluded</span>
+                    <span className="font-normal text-stone-600"> · {history.data.applications} counted, cancelled ones excluded</span>
                   </h3>
                   <p className="mt-1 text-sm text-stone-600">
                     Repeating one resistance group breeds resistant strains; rotate between groups.
                   </p>
                   <ul className="mt-2 flex flex-wrap gap-2" aria-label="Sprays by active ingredient">
                     {history.data.byActiveIngredient.map((use) => (
-                      <li key={use.activeIngredient} className="rounded-md bg-stone-50 px-2 py-1 text-sm ring-1 ring-inset ring-stone-200">
+                      <li key={use.activeIngredient} className="rounded-md bg-earth-50 px-2 py-1 text-sm ring-1 ring-earth-200 ring-inset">
                         <span className="font-medium">{use.activeIngredient}</span>
-                        {use.resistanceGroup && <span className="text-stone-500"> · group {use.resistanceGroup}</span>}
+                        {use.resistanceGroup && <span className="text-stone-600"> · group {use.resistanceGroup}</span>}
                         <span className="text-stone-600">
                           {' '}
                           · {use.applications}× · last {shortDay(use.lastApplied)}

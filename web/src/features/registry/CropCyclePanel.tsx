@@ -8,7 +8,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { stageTone } from '@/components/ui/status-tones'
 import { ApiError, userMessage } from '@/lib/api'
 import { useAdvanceStage, useCreateCropCycle, useCrops, useCropCycle } from './queries'
-import { stageLabels, type CropCycleSummary, type Plot } from './types'
+import { CheckCircle } from '@/components/icons'
+import { cn } from '@/lib/utils'
+import { stageLabels, type CropCycleSummary, type CropStage, type Plot } from './types'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -25,7 +27,7 @@ export function CropCyclePanel({ plot, canEdit }: { plot: Plot; canEdit: boolean
 
   if (!plot.activeCycle) {
     return (
-      <section className="rounded-lg border border-dashed border-stone-300 bg-white p-4">
+      <section className="rounded-xl border border-dashed border-border-strong bg-surface-card p-4">
         <h3 className="font-medium text-stone-900">No crop growing</h3>
         <p className="mt-1 text-sm text-stone-600">
           {plot.status === 'Active'
@@ -47,29 +49,31 @@ export function CropCyclePanel({ plot, canEdit }: { plot: Plot; canEdit: boolean
   const nextStage = detail?.allowedNextStages[0]
 
   return (
-    <section className="space-y-4 rounded-lg border border-stone-200 bg-white p-4">
+    <section className="space-y-4 rounded-xl border border-border-subtle bg-surface-card p-4 sm:p-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-medium text-stone-900">{summary.cropName}</h3>
+          <h3 className="font-display text-lg font-semibold text-stone-900">{summary.cropName}</h3>
           <p className="text-sm text-stone-600">Sown {summary.sownDate}</p>
         </div>
         <StatusBadge label={stageLabels[summary.stage]} tone={stageTone[summary.stage] ?? 'neutral'} />
       </header>
 
+      <StageTrack stage={summary.stage} />
+
       <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <div>
-          <dt className="text-stone-500">Expected harvest</dt>
+          <dt className="text-stone-600">Expected harvest</dt>
           <dd className="font-medium text-stone-900">{summary.expectedHarvestDate}</dd>
         </div>
         {summary.plannedHarvestDate && (
           <div>
-            <dt className="text-stone-500">Planned harvest</dt>
+            <dt className="text-stone-600">Planned harvest</dt>
             <dd className="font-medium text-stone-900">{summary.plannedHarvestDate}</dd>
           </div>
         )}
         {detail && (
           <div>
-            <dt className="text-stone-500">Days to harvest</dt>
+            <dt className="text-stone-600">Days to harvest</dt>
             <dd className="font-medium text-stone-900">
               {detail.daysToHarvest >= 0 ? detail.daysToHarvest : `${Math.abs(detail.daysToHarvest)} overdue`}
             </dd>
@@ -83,15 +87,15 @@ export function CropCyclePanel({ plot, canEdit }: { plot: Plot; canEdit: boolean
 
       {detail && detail.transitions.length > 0 && (
         <div>
-          <h4 className="text-xs font-medium uppercase tracking-wide text-stone-500">Stage history</h4>
+          <h4 className="text-sm font-semibold text-stone-800">Stage history</h4>
           <ol className="mt-2 space-y-1.5 text-sm">
             {detail.transitions.map((transition) => (
               <li key={`${transition.toStage}-${transition.transitionedAt}`} className="flex flex-wrap gap-x-2 text-stone-700">
-                <span className="tabular-nums text-stone-500">{transition.transitionedAt.slice(0, 10)}</span>
+                <span className="tabular-nums text-stone-600">{transition.transitionedAt.slice(0, 10)}</span>
                 <span>
                   {stageLabels[transition.fromStage]} → <strong className="font-medium">{stageLabels[transition.toStage]}</strong>
                 </span>
-                {transition.note && <span className="text-stone-500">“{transition.note}”</span>}
+                {transition.note && <span className="text-stone-600">“{transition.note}”</span>}
               </li>
             ))}
           </ol>
@@ -274,4 +278,42 @@ function addDays(isoDate: string, days: number): string {
   const date = new Date(isoDate)
   date.setDate(date.getDate() + days)
   return date.toISOString().slice(0, 10)
+}
+
+const stageOrder: CropStage[] = ['Sown', 'Vegetative', 'Flowering', 'FruitSet', 'PreHarvest', 'Harvested']
+
+/**
+ * The season as a track: stages reached are filled, the current one is darker and taller. The
+ * caption names the stage and what comes next, so the track reads without its colours.
+ */
+function StageTrack({ stage }: { stage: CropStage }) {
+  const current = stageOrder.indexOf(stage)
+  const next = stageOrder[current + 1]
+  return (
+    <div>
+      <ol aria-label="Crop stages" className="flex items-end gap-1">
+        {stageOrder.map((s, index) => (
+          <li
+            key={s}
+            title={stageLabels[s]}
+            aria-current={index === current ? 'step' : undefined}
+            className={cn(
+              'flex-1 rounded-full',
+              index < current ? 'h-1.5 bg-brand-400' : index === current ? 'h-2.5 bg-brand-700' : 'h-1.5 bg-surface-inset',
+            )}
+          >
+            <span className="sr-only">
+              {stageLabels[s]}
+              {index < current ? ', done' : index === current ? ', current' : ''}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-1.5 flex items-center gap-1 text-xs text-stone-700">
+        <CheckCircle size={14} className="text-brand-600" />
+        Stage {current + 1} of {stageOrder.length}
+        {next && <span className="text-stone-600">— next {stageLabels[next].toLowerCase()}</span>}
+      </p>
+    </div>
+  )
 }

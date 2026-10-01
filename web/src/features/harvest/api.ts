@@ -1,7 +1,7 @@
 import { api } from '@/lib/api'
 import { queryString } from '@/lib/query-string'
 import type { PagedResult } from '@/features/registry/types'
-import type { CollectionBooking, CollectionCentre, CollectionSlot, ForecastVsActualReport, HarvestForecast } from './types'
+import type { CollectionBooking, CollectionCentre, CollectionSlot, ForecastVsActualReport, HarvestForecast, SprayWindow } from './types'
 
 interface PageQuery {
   page?: number
@@ -64,3 +64,7 @@ export const createSlot = (input: NewSlot) => api<CollectionSlot>('/api/collecti
 
 export const listBookings = (query: BookingQuery) =>
   api<PagedResult<CollectionBooking>>(`/api/collection-bookings${queryString(query)}`)
+
+/** The coming days' spray suitability at a plot, from the same weather the V8 rule uses. */
+export const getSprayWindow = (plotId: string, days = 7) =>
+  api<SprayWindow>(`/api/weather/spray-window${queryString({ plotId, days })}`)
