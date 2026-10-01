@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/agri_widgets.dart';
+import '../../app/theme.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
+import 'case_models.dart';
 import 'case_outbox.dart';
 import 'case_providers.dart';
 import 'case_widgets.dart';
+import 'outbox_banner.dart';
 
 /// The farmer's reported problems, newest first (an agronomist sees their district's).
 /// Pull down to refresh; tap a case to follow it.
@@ -47,6 +51,7 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
     final result = await ref.read(caseOutboxProvider.notifier).sync();
     if (!mounted) return;
     setState(() => _sending = false);
+    ref.read(outboxLastTryProvider.notifier).record(offline: result.offline);
     if (result.sent > 0) ref.invalidate(myCasesProvider);
 
     final message = switch (result) {
@@ -75,29 +80,22 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
       error: (error, _) => [ErrorRetry(error: error, onRetry: () => ref.invalidate(myCasesProvider))],
       data: (items) => items.isEmpty
           ? [
-              const SizedBox(height: 24),
-              const Icon(Icons.eco_outlined, size: 48),
-              const SizedBox(height: 12),
-              Text(
-                isFarmer ? 'No problems reported yet' : 'No cases in your district',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
+              EmptyState(
+                title: isFarmer ? 'No problems reported yet' : 'No cases in your district',
+                message: isFarmer ? 'If you see spots, pests or wilting on a crop, report it and get advice.' : null,
               ),
-              if (isFarmer)
-                const Text(
-                  'If you see spots, pests or wilting on a crop, report it and get advice.',
-                  textAlign: TextAlign.center,
-                ),
             ]
           : [
-              for (final (index, c) in items.indexed) ...[
-                if (index > 0) const Divider(height: 1),
-                ListTile(
-                  title: Text('${c.cropName} · ${c.plotCode}'),
-                  subtitle: Text('${c.referenceNo} · reported ${formatDate(c.createdAt)}'),
-                  trailing: CaseStatusChip(c.status),
-                  onTap: () => context.push('/cases/${c.id}'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+                child: Text(
+                  '${items.length} case${items.length == 1 ? '' : 's'} · newest first',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
+              ),
+              for (final c in items) ...[
+                _CaseCard(summary: c),
+                const SizedBox(height: 10),
               ],
             ],
     );
@@ -118,11 +116,11 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
         },
         // One scrolling list, even when empty or offline, so pull-to-refresh always works.
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 88),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
           children: [
             if (pending.isNotEmpty) ...[
               PendingReportsCard(pending: pending, sending: _sending, onSend: _send),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
             ],
             ...content,
           ],
@@ -132,76 +130,37 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
   }
 }
 
-/// The reports waiting on this phone: what each is, when it was made, and why it has not gone.
-class PendingReportsCard extends ConsumerWidget {
-  const PendingReportsCard({required this.pending, required this.sending, required this.onSend, super.key});
+/// One case in the list: what and where, its reference and date, and where it has got to.
+class _CaseCard extends StatelessWidget {
+  const _CaseCard({required this.summary});
 
-  final List<PendingCase> pending;
-  final bool sending;
-  final VoidCallback onSend;
+  final CaseSummary summary;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final c = summary;
     final theme = Theme.of(context);
-    final waiting = pending.where((p) => p.state == PendingState.waiting).length;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      color: theme.colorScheme.secondaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return AgriCard(
+      padding: const EdgeInsets.fromLTRB(12, 12, 6, 12),
+      onTap: () => context.push('/cases/${c.id}'),
+      child: Row(
+        children: [
+          const GlyphTile(Icons.eco_outlined, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.cloud_upload_outlined),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    waiting > 0 ? 'Saved on this phone, waiting to send ($waiting)' : 'Saved reports',
-                    style: theme.textTheme.titleSmall,
-                  ),
-                ),
-                if (waiting > 0)
-                  TextButton.icon(
-                    onPressed: sending ? null : onSend,
-                    icon: sending
-                        ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.send, size: 18),
-                    label: const Text('Send now'),
-                  ),
+                Text('${c.cropName} · ${c.plotCode}', style: theme.textTheme.titleSmall),
+                Text('${c.referenceNo} · reported ${formatDate(c.createdAt)}', style: theme.textTheme.bodySmall),
+                const SizedBox(height: 6),
+                CaseStatusChip(c.status),
               ],
             ),
-            for (final item in pending)
-              ListTile(
-                contentPadding: const EdgeInsets.only(left: 32),
-                dense: true,
-                title: Text(item.label),
-                subtitle: Text(switch (item.state) {
-                  PendingState.refused => 'Not accepted: ${item.lastError ?? 'the report was refused.'}',
-                  PendingState.waiting when item.caseId != null =>
-                    'Reported; ${item.photoFiles.length} photo${item.photoFiles.length == 1 ? '' : 's'} still to send',
-                  PendingState.waiting => 'Made ${_timeOf(item.capturedAt)} · will be sent when online',
-                }),
-                trailing: item.state == PendingState.refused
-                    ? IconButton(
-                        tooltip: 'Discard',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => ref.read(caseOutboxProvider.notifier).discard(item.clientReference),
-                      )
-                    : null,
-              ),
-          ],
-        ),
+          ),
+          const Icon(Icons.chevron_right, color: AgriColors.inkMuted),
+        ],
       ),
     );
-  }
-
-  /// "2026-09-29 10:42" on the phone's own clock.
-  static String _timeOf(DateTime at) {
-    final local = at.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${formatDate(local)} ${two(local.hour)}:${two(local.minute)}';
   }
 }

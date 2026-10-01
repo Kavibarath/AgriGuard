@@ -25,3 +25,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # The only two photographs on the phone (login panel and home header), cropped and compressed
+  # from the web's copies (web/public/img); see docs/design/IMAGE-CREDITS.md.
+  assets:
+    - assets/img/hill-terraces-portrait.webp
+    - assets/img/harvest-carry-portrait.webp

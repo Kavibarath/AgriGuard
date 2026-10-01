@@ -139,20 +139,35 @@ void main() {
   /// Replaces the app so any polling timer is cancelled before the test ends.
   Future<void> closeApp(WidgetTester tester) => tester.pumpWidget(const SizedBox());
 
+  /// The report is five steps: photo → location → symptoms → notes → review.
+  Future<void> next(WidgetTester tester) async {
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> choosePlot(WidgetTester tester) async {
+    await tester.tap(find.byType(DropdownButtonFormField<ReportablePlot>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('P-01 · Tomato').last);
+    await tester.pumpAndSettle();
+  }
+
   group('reporting a problem', () {
+    /// From the photo step to the review step, filling in each step on the way.
     Future<void> fillIn(WidgetTester tester) async {
-      await tester.tap(find.byType(DropdownButtonFormField<ReportablePlot>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.textContaining('P-01 · Tomato').last);
-      await tester.pumpAndSettle();
+      await next(tester); // no photo
+      await choosePlot(tester);
+      await next(tester);
       await tester.tap(find.text('Water-soaked patches on leaves'));
       await tester.tap(find.text('Bad'));
+      await tester.pump();
+      await next(tester);
       await tester.enterText(find.widgetWithText(TextFormField, 'Anything else? (optional)'), '  White fuzz under leaves.  ');
       await tester.pump();
+      await next(tester);
     }
 
     Future<void> submit(WidgetTester tester) async {
-      await tester.ensureVisible(find.text('Report problem'));
       await tester.tap(find.text('Report problem'));
       await tester.pumpAndSettle();
     }
@@ -162,8 +177,16 @@ void main() {
       when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail());
       await openApp(tester, '/cases/new', fix: const GeoFix(latitude: 6.95, longitude: 80.79, accuracyMetres: 8));
 
+      await next(tester);
       expect(find.text('Your location will be sent (within 8 m).'), findsOneWidget);
+      expect(find.text('Good fix'), findsOneWidget);
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
       await fillIn(tester);
+      // The review shows what will be sent before anything is.
+      expect(find.text('Check and send'), findsOneWidget);
+      expect(find.text('Water-soaked patches on leaves'), findsOneWidget);
+      expect(find.text('How bad: Bad'), findsOneWidget);
       await submit(tester);
 
       final sent = verify(() => repository.reportCase(captureAny())).captured.single as NewCase;
@@ -189,7 +212,10 @@ void main() {
       when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail());
       await openApp(tester, '/cases/new');
 
+      await next(tester);
       expect(find.textContaining("the plot's registered location will be used"), findsOneWidget);
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
       await fillIn(tester);
       await submit(tester);
 
@@ -197,13 +223,51 @@ void main() {
       expect((sent.latitude, sent.longitude), (6.9497, 80.7891));
     });
 
-    testWidgets('asks for a plot and a symptom before sending anything', (tester) async {
+    testWidgets('asks for a plot and a symptom before going on', (tester) async {
       await openApp(tester, '/cases/new');
 
-      await submit(tester);
+      await next(tester); // the photo is optional
+      await next(tester);
+      expect(find.text('Choose the plot with the problem'), findsOneWidget);
 
+      await choosePlot(tester);
+      await next(tester);
+      await next(tester);
       expect(find.text('Tick at least one symptom you can see.'), findsOneWidget);
+      expect(find.text('What do you see?'), findsOneWidget, reason: 'still on the symptoms step');
       verifyNever(() => repository.reportCase(any()));
+    });
+
+    testWidgets('groups the symptoms by the part of the plant', (tester) async {
+      when(() => repository.symptoms()).thenAnswer((_) async => const [
+            Symptom(code: 'leaf_yellowing', label: 'Yellowing leaves'),
+            Symptom(code: 'stem_dark_lesions', label: 'Dark lesions on stems'),
+            Symptom(code: 'insects_white_underside', label: 'Tiny white flying insects under leaves'),
+            Symptom(code: 'new_unknown_sign', label: 'Something new'),
+          ]);
+      await openApp(tester, '/cases/new');
+      await next(tester);
+      await choosePlot(tester);
+      await next(tester);
+
+      for (final heading in ['Leaves', 'Stems', 'Insects and pests', 'Other signs']) {
+        expect(find.text(heading), findsOneWidget);
+      }
+      expect(find.text('Flowers, fruit and grain'), findsNothing, reason: 'no symptom of that part in the list');
+    });
+
+    testWidgets('the back button steps back through the report before leaving it', (tester) async {
+      await openApp(tester, '/cases/new');
+      await next(tester);
+      await choosePlot(tester);
+      await next(tester);
+      expect(find.text('What do you see?'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Where is it?'), findsOneWidget);
+      expect(find.text('Report a crop problem'), findsOneWidget, reason: 'still on the report');
     });
 
     testWidgets('shows the API’s reason when the report is refused', (tester) async {
@@ -287,12 +351,13 @@ void main() {
     final offline = ApiException(message: 'Could not reach AgriGuard. Check your connection.', isNetworkError: true);
 
     Future<void> fillAndSubmit(WidgetTester tester) async {
-      await tester.tap(find.byType(DropdownButtonFormField<ReportablePlot>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.textContaining('P-01 · Tomato').last);
-      await tester.pumpAndSettle();
+      await next(tester);
+      await choosePlot(tester);
+      await next(tester);
       await tester.tap(find.text('Water-soaked patches on leaves'));
-      await tester.ensureVisible(find.text('Report problem'));
+      await tester.pump();
+      await next(tester);
+      await next(tester);
       await tester.tap(find.text('Report problem'));
       await tester.pumpAndSettle();
     }
@@ -314,6 +379,8 @@ void main() {
       expect(find.textContaining('Your report is saved on this phone'), findsOneWidget);
       expect(store.files['outbox.json'], isNotNull);
       expect(store.files.values.whereType<Uint8List>().single, tinyPng);
+      // Back on the home screen, the queue stays in sight.
+      expect(find.text('1 report waiting to send'), findsOneWidget);
 
       await goTo(tester, '/cases');
       expect(find.text('Saved on this phone, waiting to send (1)'), findsOneWidget);
@@ -344,6 +411,19 @@ void main() {
       await closeApp(tester);
     });
 
+    testWidgets('says when it last tried and found no signal', (tester) async {
+      when(() => repository.reportCase(any())).thenThrow(offline);
+      await openApp(tester, '/cases/new');
+      await fillAndSubmit(tester);
+
+      await goTo(tester, '/cases');
+
+      expect(find.text('Saved on this phone, waiting to send (1)'), findsOneWidget);
+      expect(find.textContaining('No signal at'), findsOneWidget);
+      expect(find.text('Send now'), findsOneWidget);
+      await closeApp(tester);
+    });
+
     testWidgets('shows why a saved report was refused, and lets the farmer discard it', (tester) async {
       var attempts = 0;
       when(() => repository.reportCase(any())).thenAnswer((_) async {
@@ -368,7 +448,10 @@ void main() {
       when(() => repository.symptoms()).thenThrow(offline);
       await openApp(tester, '/cases/new');
 
+      await next(tester);
       expect(find.byType(DropdownButtonFormField<ReportablePlot>), findsOneWidget);
+      await choosePlot(tester);
+      await next(tester);
       expect(find.text('Water-soaked patches on leaves'), findsOneWidget);
     });
 
@@ -436,6 +519,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('An agronomist is reviewing it now'), findsOneWidget);
+      // The timeline says a person has it, and that the AI step is behind it.
+      expect(find.bySemanticsLabel('Agronomist review: waiting for the agronomist'), findsOneWidget);
+      expect(find.bySemanticsLabel('AI analysis: done'), findsOneWidget);
       await closeApp(tester);
     });
 
