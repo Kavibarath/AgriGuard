@@ -26,8 +26,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # The only two photographs on the phone (login panel and home header), cropped and compressed
-  # from the web's copies (web/public/img); see docs/design/IMAGE-CREDITS.md.
+  # The phone's only photographs: the welcome and sign-in screens (under the spotlight), and the
+  # full-screen home photo for each role. Copies of the web's files (web/public/img); see
+  # docs/design/IMAGE-CREDITS.md.
   assets:
-    - assets/img/hill-terraces-portrait.webp
-    - assets/img/harvest-carry-portrait.webp
+    - assets/img/harvest-lanes-portrait.webp
+    - assets/img/fields-aerial-portrait.webp
+    - assets/img/tractor-maize-portrait.webp

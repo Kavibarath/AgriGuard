@@ -31,6 +31,12 @@ const toneClasses: Record<PinTone, string> = {
 
 const pinSizes = { sm: 'size-3', md: 'size-4', lg: 'size-6' } as const
 
+/**
+ * Pins are stacked by weight, so where they crowd together the most serious one is on top and never
+ * hidden: severe over danger over warning, and so on down to neutral. The selected pin is above all.
+ */
+const pinLayer: Record<PinTone, number> = { severe: 6, danger: 5, warning: 4, active: 3, success: 2, neutral: 1 }
+
 const MIN_ZOOM = 3
 const MAX_ZOOM = 18
 // Used until the container has been measured, and in tests, where jsdom lays nothing out.
@@ -134,11 +140,12 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
       <ul aria-label="Map pins">
         {pins.map((pin) => {
           const at = project(pin.position, zoom)
-          const style = { left: at.x - origin.x, top: at.y - origin.y }
+          const style = { left: at.x - origin.x, top: at.y - origin.y, zIndex: pin.selected ? 10 : pinLayer[pin.tone] }
           const dot = cn(
-            'absolute block -translate-x-1/2 -translate-y-1/2 rounded-full shadow ring-2',
+            // Raised off the map with a canopy-tinted shadow, never a neutral black one.
+            'absolute block -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_2px_4px_rgb(19_48_37/0.35)] ring-2',
             pinSizes[pin.size ?? 'md'],
-            pin.selected && 'z-10 shadow-lifted outline-4 outline-offset-2 outline-brand-600/70',
+            pin.selected && 'shadow-lifted outline-4 outline-offset-2 outline-brand-600/70',
             pin.variant === 'ring' ? 'ring-[3px]' : 'border-2 border-white',
             toneClasses[pin.tone],
             // Last, so tailwind-merge lets it replace the tone's fill: a ring is hollow.
@@ -147,7 +154,7 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
           return (
             <li key={pin.id}>
               {pin.href ? (
-                <Link to={pin.href} aria-label={pin.label} title={pin.label} className={cn(dot, 'hover:scale-110')} style={style} />
+                <Link to={pin.href} aria-label={pin.label} title={pin.label} className={cn(dot, 'motion-safe:transition-transform motion-safe:hover:scale-110')} style={style} />
               ) : (
                 <span role="img" aria-label={pin.label} title={pin.label} className={dot} style={style} />
               )}
@@ -156,7 +163,7 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
         })}
       </ul>
 
-      <div className="absolute top-2 right-2 flex flex-col overflow-hidden rounded-md border border-border-strong bg-surface-card shadow-raised">
+      <div className="absolute top-2 right-2 z-20 flex flex-col overflow-hidden rounded-md border border-border-strong bg-surface-card shadow-raised">
         <button type="button" aria-label="Zoom in" className="size-8 text-lg leading-none hover:bg-surface-sunken disabled:text-stone-400" disabled={zoom >= MAX_ZOOM} onClick={() => changeZoom(1)}>
           +
         </button>
@@ -165,7 +172,7 @@ export function TileMap({ pins, height = 320, label, maxFitZoom = 13 }: { pins: 
         </button>
       </div>
 
-      <p className="absolute right-0 bottom-0 rounded-tl-md bg-surface-card/85 px-1.5 text-xs text-stone-700">
+      <p className="absolute right-0 bottom-0 z-20 rounded-tl-md bg-surface-card/85 px-1.5 text-xs text-stone-700">
         ©{' '}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">
           OpenStreetMap

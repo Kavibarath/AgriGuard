@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/auth_controller.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/splash_screen.dart';
+import '../features/auth/welcome_screen.dart';
 import '../features/cases/case_detail_screen.dart';
 import '../features/cases/cases_screen.dart';
 import '../features/cases/new_case_screen.dart';
@@ -14,6 +16,12 @@ import '../features/orders/orders_screen.dart';
 import '../features/registry/farms_screen.dart';
 import '../features/registry/new_plot_screen.dart';
 import '../features/registry/plot_screen.dart';
+
+/// Every screen's page. With the system's "Remove animations" setting on, a screen simply appears:
+/// no transition on the new screen and none on the old. Otherwise, the platform's usual transition.
+Page<void> _page(BuildContext context, GoRouterState state, Widget child) => MediaQuery.disableAnimationsOf(context)
+    ? NoTransitionPage<void>(key: state.pageKey, child: child)
+    : MaterialPage<void>(key: state.pageKey, child: child);
 
 /// Bridges Riverpod → go_router: any auth change re-evaluates `redirect`.
 class _AuthChangeNotifier extends ChangeNotifier {
@@ -36,40 +44,43 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Still reading the stored session: hold on the splash rather than flashing the login screen.
       if (auth.isLoading) return location == '/splash' ? null : '/splash';
 
+      // Signed out: the welcome screen, and the sign-in screen it leads to. Signed in: never either.
       final signedIn = auth.value != null;
-      if (!signedIn) return location == '/login' ? null : '/login';
-      if (location == '/login' || location == '/splash') return '/home';
+      const publicScreens = {'/welcome', '/login'};
+      if (!signedIn) return publicScreens.contains(location) ? null : '/welcome';
+      if (publicScreens.contains(location) || location == '/splash') return '/home';
       return null;
     },
     routes: [
-      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-      GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
-      GoRoute(path: '/harvest', builder: (_, _) => const HarvestScreen()),
-      GoRoute(path: '/orders', builder: (_, _) => const OrdersScreen()),
+      GoRoute(path: '/splash', pageBuilder: (context, state) => _page(context, state, const SplashScreen())),
+      GoRoute(path: '/welcome', pageBuilder: (context, state) => _page(context, state, const WelcomeScreen())),
+      GoRoute(path: '/login', pageBuilder: (context, state) => _page(context, state, const LoginScreen())),
+      GoRoute(path: '/home', pageBuilder: (context, state) => _page(context, state, const HomeScreen())),
+      GoRoute(path: '/harvest', pageBuilder: (context, state) => _page(context, state, const HarvestScreen())),
+      GoRoute(path: '/orders', pageBuilder: (context, state) => _page(context, state, const OrdersScreen())),
       GoRoute(
         path: '/farms',
-        builder: (_, _) => const FarmsScreen(),
+        pageBuilder: (context, state) => _page(context, state, const FarmsScreen()),
         routes: [
           GoRoute(
             path: ':farmId',
-            builder: (_, state) => FarmScreen(farmId: state.pathParameters['farmId']!),
+            pageBuilder: (context, state) => _page(context, state, FarmScreen(farmId: state.pathParameters['farmId']!)),
             routes: [
-              GoRoute(path: 'plots/new', builder: (_, state) => NewPlotScreen(farmId: state.pathParameters['farmId']!)),
+              GoRoute(path: 'plots/new', pageBuilder: (context, state) => _page(context, state, NewPlotScreen(farmId: state.pathParameters['farmId']!))),
             ],
           ),
         ],
       ),
-      GoRoute(path: '/plots/:plotId', builder: (_, state) => PlotScreen(plotId: state.pathParameters['plotId']!)),
+      GoRoute(path: '/plots/:plotId', pageBuilder: (context, state) => _page(context, state, PlotScreen(plotId: state.pathParameters['plotId']!))),
       GoRoute(
         path: '/cases',
-        builder: (_, _) => const CasesScreen(),
+        pageBuilder: (context, state) => _page(context, state, const CasesScreen()),
         routes: [
           // Before ':caseId', so "new" is not read as a case id.
-          GoRoute(path: 'new', builder: (_, _) => const NewCaseScreen()),
+          GoRoute(path: 'new', pageBuilder: (context, state) => _page(context, state, const NewCaseScreen())),
           GoRoute(
             path: ':caseId',
-            builder: (_, state) => CaseDetailScreen(caseId: state.pathParameters['caseId']!),
+            pageBuilder: (context, state) => _page(context, state, CaseDetailScreen(caseId: state.pathParameters['caseId']!)),
           ),
         ],
       ),

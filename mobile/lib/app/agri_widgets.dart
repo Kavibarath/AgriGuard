@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -15,8 +16,9 @@ class BrandMark extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) =>
-      ExcludeSemantics(child: CustomPaint(size: Size.square(size), painter: const _BrandMarkPainter()));
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: CustomPaint(size: Size.square(size), painter: const _BrandMarkPainter()),
+  );
 }
 
 class _BrandMarkPainter extends CustomPainter {
@@ -26,10 +28,7 @@ class _BrandMarkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // The web mark is drawn on a 32-unit grid.
     canvas.scale(size.width / 32);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(0, 0, 32, 32), const Radius.circular(8)),
-      Paint()..color = AgriColors.brand500,
-    );
+    canvas.drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(0, 0, 32, 32), const Radius.circular(8)), Paint()..color = AgriColors.brand500);
     final shield = Path()
       ..moveTo(16, 5.5)
       ..lineTo(8, 8.4)
@@ -73,12 +72,12 @@ enum Tone { neutral, active, warning, done, danger }
 
 /// The fill, ring and ink of each tone.
 ({Color fill, Color ring, Color ink}) toneColors(Tone tone) => switch (tone) {
-      Tone.neutral => (fill: AgriColors.surfaceInset, ring: AgriColors.borderStrong, ink: AgriColors.inkSoft),
-      Tone.active => (fill: AgriColors.info50, ring: AgriColors.info200, ink: AgriColors.info800),
-      Tone.warning => (fill: AgriColors.warning50, ring: AgriColors.warning200, ink: AgriColors.warning800),
-      Tone.done => (fill: AgriColors.success50, ring: AgriColors.success200, ink: AgriColors.success800),
-      Tone.danger => (fill: AgriColors.danger50, ring: AgriColors.danger200, ink: AgriColors.danger800),
-    };
+  Tone.neutral => (fill: AgriColors.surfaceInset, ring: AgriColors.borderStrong, ink: AgriColors.inkSoft),
+  Tone.active => (fill: AgriColors.info50, ring: AgriColors.info200, ink: AgriColors.info800),
+  Tone.warning => (fill: AgriColors.warning50, ring: AgriColors.warning200, ink: AgriColors.warning800),
+  Tone.done => (fill: AgriColors.success50, ring: AgriColors.success200, ink: AgriColors.success800),
+  Tone.danger => (fill: AgriColors.danger50, ring: AgriColors.danger200, ink: AgriColors.danger800),
+};
 
 /// The shape that carries a tone's meaning.
 class ToneIcon extends StatelessWidget {
@@ -188,12 +187,118 @@ class AgriCard extends StatelessWidget {
       decoration: BoxDecoration(borderRadius: radius, boxShadow: raised ? AgriShadows.raised : null),
       child: Material(
         color: color,
-        shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: borderColor)),
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: borderColor),
+        ),
         clipBehavior: Clip.antiAlias,
-        child: onTap == null ? Padding(padding: padding, child: child) : InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
+        child: onTap == null
+            ? Padding(padding: padding, child: child)
+            : InkWell(
+                onTap: onTap,
+                child: Padding(padding: padding, child: child),
+              ),
       ),
     );
   }
+}
+
+/// Liquid glass for cards over a photograph: the photo behind is blurred and brightened, with a
+/// sheen brightest at the top-left and a bright top edge. Words on it are white (the scrim under
+/// the glass keeps them readable). [onTap] makes the whole pane one target with a ripple.
+class GlassCard extends StatelessWidget {
+  const GlassCard({required this.child, this.padding = const EdgeInsets.all(16), this.onTap, super.key});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(16);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: const [BoxShadow(color: Color(0x40133025), offset: Offset(0, 10), blurRadius: 28)],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              child: Ink(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  border: Border.all(color: const Color(0x47FFFFFF)),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0x38FFFFFF), Color(0x14FFFFFF), Color(0x1FFFFFFF)],
+                    stops: [0, 0.55, 1],
+                  ),
+                ),
+                child: Padding(padding: padding, child: child),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A ploughed field from above, as faint curving rows with a few leaves in the margins: the
+/// ground behind a form, so a plain page has a sense of place. Still (it is behind words).
+class FieldPattern extends StatelessWidget {
+  const FieldPattern({super.key});
+
+  @override
+  Widget build(BuildContext context) => const ExcludeSemantics(
+    child: CustomPaint(painter: _FieldPatternPainter(), size: Size.infinite),
+  );
+}
+
+class _FieldPatternPainter extends CustomPainter {
+  const _FieldPatternPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rows = Paint()
+      ..color = AgriColors.brand300.withValues(alpha: 0.45)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    for (var y = 24.0; y < size.height; y += 34) {
+      final path = Path()..moveTo(0, y);
+      // Two waves across the width, leaving and arriving at the same angle.
+      final w = size.width;
+      path.cubicTo(w * 0.125, y - 14, w * 0.375, y + 14, w * 0.5, y);
+      path.cubicTo(w * 0.625, y - 14, w * 0.875, y + 14, w, y);
+      canvas.drawPath(path, rows);
+    }
+    final leaf = Paint()..color = AgriColors.brand200.withValues(alpha: 0.9);
+    final vein = Paint()
+      ..color = AgriColors.brand400
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (final (fx, fy, s, turn) in const [(0.9, 0.9, 26.0, 0.6), (0.08, 0.95, 22.0, -0.4), (0.95, 0.8, 18.0, 2.2), (0.5, 0.97, 16.0, 1.4)]) {
+      canvas.save();
+      canvas.translate(size.width * fx, size.height * fy);
+      canvas.rotate(turn);
+      final p = Path()
+        ..moveTo(-s / 2, s / 2)
+        ..cubicTo(-s / 2, -s / 6, -s / 6, -s / 2, s / 2, -s / 2)
+        ..cubicTo(s / 2, s / 6, s / 6, s / 2, -s / 2, s / 2);
+      canvas.drawPath(p, leaf);
+      canvas.drawLine(Offset(-s / 2, s / 2), Offset(s / 4, -s / 4), vein);
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// A rounded glyph tile that leads a card: canopy for crops and cases, earth for soil, harvest
@@ -207,15 +312,15 @@ class GlyphTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: earth ? AgriColors.earth50 : AgriColors.brand50,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: earth ? AgriColors.earth200 : AgriColors.brand200),
-        ),
-        child: Icon(icon, size: size * 0.5, color: earth ? AgriColors.earth700 : AgriColors.brand700),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: earth ? AgriColors.earth50 : AgriColors.brand50,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: earth ? AgriColors.earth200 : AgriColors.brand200),
+    ),
+    child: Icon(icon, size: size * 0.5, color: earth ? AgriColors.earth700 : AgriColors.brand700),
+  );
 }
 
 /// A section's heading inside a screen: sans, with an optional glyph and an action at the end.
@@ -229,18 +334,17 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 20, color: earth ? AgriColors.earth600 : AgriColors.brand700),
-              const SizedBox(width: 8),
-            ],
-            Expanded(child: Semantics(header: true, child: Text(text, style: Theme.of(context).textTheme.titleMedium))),
-            ?trailing,
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        if (icon != null) ...[Icon(icon, size: 20, color: earth ? AgriColors.earth600 : AgriColors.brand700), const SizedBox(width: 8)],
+        Expanded(
+          child: Semantics(header: true, child: Text(text, style: Theme.of(context).textTheme.titleMedium)),
         ),
-      );
+        ?trailing,
+      ],
+    ),
+  );
 }
 
 /// A label above a value: the two-line fact used in summaries and the prescription.
@@ -277,36 +381,30 @@ class BottomActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AgriColors.surfaceCard,
-          border: Border(top: BorderSide(color: AgriColors.borderSubtle)),
-          boxShadow: AgriShadows.lifted,
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    decoration: const BoxDecoration(
+      color: AgriColors.surfaceCard,
+      border: Border(top: BorderSide(color: AgriColors.borderSubtle)),
+      boxShadow: AgriShadows.lifted,
+    ),
+    child: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (note != null) ...[Text(note!, style: Theme.of(context).textTheme.bodySmall), const SizedBox(height: 10)],
+            Row(
               children: [
-                if (note != null) ...[
-                  Text(note!, style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 10),
-                ],
-                Row(
-                  children: [
-                    for (final (i, child) in children.indexed) ...[
-                      if (i > 0) const SizedBox(width: 12),
-                      child,
-                    ],
-                  ],
-                ),
+                for (final (i, child) in children.indexed) ...[if (i > 0) const SizedBox(width: 12), child],
               ],
             ),
-          ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 /// Nothing to show yet: a line drawing in canopy-300 (never a photo), what is missing, and what
@@ -325,12 +423,19 @@ class EmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Column(
         children: [
-          CustomPaint(size: const Size(120, 84), painter: _SproutPainter(earth: earth)),
+          CustomPaint(
+            size: const Size(120, 84),
+            painter: _SproutPainter(earth: earth),
+          ),
           const SizedBox(height: 16),
           Text(title, textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
           if (message != null) ...[
             const SizedBox(height: 6),
-            Text(message!, textAlign: TextAlign.center, style: theme.textTheme.bodyMedium?.copyWith(color: AgriColors.inkMuted)),
+            Text(
+              message!,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: AgriColors.inkMuted),
+            ),
           ],
         ],
       ),
@@ -391,6 +496,8 @@ class InlineSpinner extends StatelessWidget {
   final Color? color;
 
   @override
-  Widget build(BuildContext context) =>
-      SizedBox.square(dimension: size, child: CircularProgressIndicator(strokeWidth: 2, color: color));
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: size,
+    child: CircularProgressIndicator(strokeWidth: 2, color: color),
+  );
 }

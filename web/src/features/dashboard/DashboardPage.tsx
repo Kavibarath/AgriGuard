@@ -21,10 +21,10 @@ import { AwaitingCollection } from '@/features/inventory/DealerPanels'
 import { useLowStock, useOrders, useRules, useStockValuation } from '@/features/inventory/queries'
 import { orderStatusLabels, type Order } from '@/features/inventory/types'
 import { usePlots } from '@/features/registry/queries'
-import { ContextBanner } from './ContextBanner'
+import { DashboardHero } from './DashboardHero'
 
 /**
- * The dashboard (§7): the user's own landscape, four figures for what is waiting on them, then
+ * The dashboard (§7): an opening card with the role's photograph and four figures for what is waiting on them, then
  * their work queue beside the one panel that informs it — spray weather for field roles, low stock
  * for a dealer, the leading pathogens for the administrator. Every figure links to where it is
  * worked, and every panel keeps its loading, empty and error states.
@@ -37,17 +37,10 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6 pt-5">
-      <ContextBanner user={user} districtName={signal.data?.districtName} />
-
-      <section aria-labelledby="glance-heading">
-        <h2 id="glance-heading" className="sr-only">
-          At a glance
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <GlanceTiles user={user} />
-          <OutbreakGlance user={user} />
-        </div>
-      </section>
+      <DashboardHero user={user} districtName={signal.data?.districtName}>
+        <GlanceTiles user={user} />
+        <OutbreakGlance user={user} />
+      </DashboardHero>
 
       <div className="grid items-start gap-4 xl:grid-cols-12">
         <div className="xl:col-span-8">

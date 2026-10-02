@@ -1,4 +1,4 @@
-import { createBrowserRouter, createMemoryRouter, Navigate, type RouteObject } from 'react-router'
+import { createBrowserRouter, createMemoryRouter, type RouteObject } from 'react-router'
 import { AppShell } from '@/components/layout/AppShell'
 import { MessagePage } from '@/components/MessagePage'
 import { AgentRunPage } from '@/features/agent-runs/AgentRunPage'
@@ -8,6 +8,7 @@ import { CasesPage } from '@/features/cases/CasesPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { HomePage } from '@/features/home/HomePage'
 import { InventoryPage } from '@/features/inventory/InventoryPage'
 import { OrdersPage } from '@/features/inventory/OrdersPage'
 import { CollectionPlannerPage } from '@/features/harvest/CollectionPlannerPage'
@@ -19,7 +20,8 @@ import { PlotDetailPage } from '@/features/registry/PlotDetailPage'
 import { RulesPage } from '@/features/rules/RulesPage'
 
 export const routes: RouteObject[] = [
-  { path: '/', element: <Navigate to="/dashboard" replace /> },
+  // The public introduction; signing in starts from here, or from any page that needs a session.
+  { path: '/', element: <HomePage /> },
   { path: '/login', element: <LoginPage /> },
   // Development only: the tokens and components in every state (docs/design/TOKENS.md).
   ...(import.meta.env.DEV

@@ -5,7 +5,8 @@ export function Spinner({ className, label = 'Loading' }: { className?: string; 
     <span
       role="status"
       aria-label={label}
-      className={cn('inline-block size-5 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600', className)}
+      // motion-essential: it keeps turning, slowly, under reduced motion (index.css).
+      className={cn('motion-essential inline-block size-5 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600', className)}
     />
   )
 }

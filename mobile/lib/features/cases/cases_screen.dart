@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/agri_widgets.dart';
+import '../../app/motion.dart';
 import '../../app/theme.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
@@ -76,7 +77,12 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
     final isFarmer = ref.watch(currentUserProvider)?.role == UserRole.farmer;
 
     final List<Widget> content = cases.when(
-      loading: () => [const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))],
+      loading: () => [
+        const Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ],
       error: (error, _) => [ErrorRetry(error: error, onRetry: () => ref.invalidate(myCasesProvider))],
       data: (items) => items.isEmpty
           ? [
@@ -88,13 +94,13 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
           : [
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
-                child: Text(
-                  '${items.length} case${items.length == 1 ? '' : 's'} · newest first',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                child: Text('${items.length} case${items.length == 1 ? '' : 's'} · newest first', style: Theme.of(context).textTheme.bodySmall),
               ),
-              for (final c in items) ...[
-                _CaseCard(summary: c),
+              for (final (i, c) in items.indexed) ...[
+                Reveal(
+                  index: i,
+                  child: _CaseCard(summary: c),
+                ),
                 const SizedBox(height: 10),
               ],
             ],
@@ -118,10 +124,7 @@ class _CasesScreenState extends ConsumerState<CasesScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
           children: [
-            if (pending.isNotEmpty) ...[
-              PendingReportsCard(pending: pending, sending: _sending, onSend: _send),
-              const SizedBox(height: 16),
-            ],
+            if (pending.isNotEmpty) ...[PendingReportsCard(pending: pending, sending: _sending, onSend: _send), const SizedBox(height: 16)],
             ...content,
           ],
         ),

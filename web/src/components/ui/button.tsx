@@ -4,12 +4,17 @@ import { cn } from '@/lib/utils'
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'sm' | 'md' | 'lg'
 
+/** A hairline of light along the top edge, and a canopy-tinted drop: lit from above. */
+const lit = 'shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_1px_2px_rgb(19_48_37/0.18),0_4px_12px_rgb(19_48_37/0.12)]'
+
 const variants: Record<Variant, string> = {
-  // brand-600, not 500: white on it is 6.7:1, where 500 only just reaches 4.5:1.
-  primary: 'bg-brand-600 text-white shadow-raised hover:bg-brand-700 active:bg-brand-800',
-  secondary: 'border border-border-strong bg-surface-card text-stone-900 shadow-raised hover:border-stone-400 hover:bg-surface-sunken',
+  // A canopy gradient from brand-600 down: white on its lightest point is 6.7:1, where 500 only
+  // just reaches 4.5:1.
+  primary: `bg-gradient-to-b from-brand-600 to-brand-700 text-white ${lit} hover:from-brand-700 hover:to-brand-800 active:from-brand-800 active:to-brand-800`,
+  secondary:
+    'border border-border-strong bg-gradient-to-b from-surface-card to-surface-sunken text-stone-900 shadow-[inset_0_1px_0_rgb(255_255_255/1),0_1px_2px_rgb(19_48_37/0.06)] hover:border-stone-400 hover:to-surface-inset',
   ghost: 'text-stone-700 hover:bg-surface-inset hover:text-stone-900',
-  danger: 'bg-danger text-white shadow-raised hover:bg-danger-800',
+  danger: `bg-gradient-to-b from-danger to-danger-800 text-white ${lit} hover:from-danger-800`,
 }
 
 const sizes: Record<Size, string> = {
@@ -45,7 +50,7 @@ export function Button({ variant = 'primary', size = 'md', loading = false, clas
       {...props}
     >
       {loading && (
-        <span aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        <span aria-hidden="true" className="motion-essential size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
       )}
       {children}
     </button>

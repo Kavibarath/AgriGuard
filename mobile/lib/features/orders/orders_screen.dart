@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/agri_widgets.dart';
+import '../../app/motion.dart';
 import '../../app/theme.dart';
 import '../cases/case_widgets.dart';
 import 'orders.dart';
@@ -60,7 +61,10 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                   itemCount: orders.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 14),
-                  itemBuilder: (_, i) => OrderCard(order: orders[i]),
+                  itemBuilder: (_, i) => Reveal(
+                    index: i,
+                    child: OrderCard(order: orders[i]),
+                  ),
                 ),
         ),
       ),
@@ -70,11 +74,11 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
 
 /// How each order status reads: still with the dealer, ready, done or called off.
 Tone orderTone(OrderStatus status) => switch (status) {
-      OrderStatus.confirmed => Tone.active,
-      OrderStatus.packed || OrderStatus.collected => Tone.done,
-      OrderStatus.cancelled => Tone.danger,
-      OrderStatus.draft => Tone.neutral,
-    };
+  OrderStatus.confirmed => Tone.active,
+  OrderStatus.packed || OrderStatus.collected => Tone.done,
+  OrderStatus.cancelled => Tone.danger,
+  OrderStatus.draft => Tone.neutral,
+};
 
 class OrderCard extends StatelessWidget {
   const OrderCard({required this.order, super.key});
@@ -130,11 +134,7 @@ class OrderCard extends StatelessWidget {
                     child: Text('${l.packs} × ${l.productName} (${formatNumber(l.quantity)} ${l.unitLabel})', style: theme.textTheme.bodyMedium),
                   ),
                 const Divider(height: 14),
-                Text(
-                  'Total ${formatLkr(o.totalAmount)}',
-                  textAlign: TextAlign.end,
-                  style: theme.textTheme.titleSmall,
-                ),
+                Text('Total ${formatLkr(o.totalAmount)}', textAlign: TextAlign.end, style: theme.textTheme.titleSmall),
               ],
             ),
           ),
@@ -173,11 +173,7 @@ class _Progress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final steps = [
-      ('Ordered', order.confirmedAt),
-      ('Packed', order.packedAt),
-      ('Collected', order.collectedAt),
-    ];
+    final steps = [('Ordered', order.confirmedAt), ('Packed', order.packedAt), ('Collected', order.collectedAt)];
     final theme = Theme.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,7 +189,12 @@ class _Progress extends StatelessWidget {
                   Row(
                     children: [
                       // The line in from the step before, and out to the step after.
-                      Expanded(child: Container(height: 2, color: i == 0 ? Colors.transparent : (at == null ? AgriColors.borderStrong : AgriColors.brand300))),
+                      Expanded(
+                        child: Container(
+                          height: 2,
+                          color: i == 0 ? Colors.transparent : (at == null ? AgriColors.borderStrong : AgriColors.brand300),
+                        ),
+                      ),
                       at == null
                           ? const ToneIcon(Tone.neutral, size: 26, color: AgriColors.outline)
                           : Container(
@@ -213,7 +214,10 @@ class _Progress extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(label, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600, color: at == null ? AgriColors.inkMuted : AgriColors.ink)),
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600, color: at == null ? AgriColors.inkMuted : AgriColors.ink),
+                  ),
                   Text(at == null ? '—' : formatDate(at), style: theme.textTheme.bodySmall),
                 ],
               ),

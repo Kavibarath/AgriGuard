@@ -207,15 +207,40 @@ export const SignOut: Icon = (p) => (
   </Svg>
 )
 
+export const ChevronLeft: Icon = (p) => (
+  <Svg {...p}>
+    <path d="m14.5 6-6 6 6 6" />
+  </Svg>
+)
+
 export const ChevronRight: Icon = (p) => (
   <Svg {...p}>
     <path d="m9.5 6 6 6-6 6" />
   </Svg>
 )
 
+export const ChevronDown: Icon = (p) => (
+  <Svg {...p}>
+    <path d="m6 9.5 6 6 6-6" />
+  </Svg>
+)
+
 export const ArrowLeft: Icon = (p) => (
   <Svg {...p}>
     <path d="M19 12H5.5M11 6 5 12l6 6" />
+  </Svg>
+)
+
+export const ArrowRight: Icon = (p) => (
+  <Svg {...p}>
+    <path d="M5 12h13.5M13 6l6 6-6 6" />
+  </Svg>
+)
+
+/** A link that leaves AgriGuard for another site. */
+export const ExternalLink: Icon = (p) => (
+  <Svg {...p}>
+    <path d="M13.5 5.5H18.5V10.5M18.5 5.5 11 13M10 6.5H6.5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V14" />
   </Svg>
 )
 

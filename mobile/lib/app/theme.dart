@@ -242,6 +242,28 @@ ThemeData buildAgriTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         textStyle: text.labelLarge,
         shape: rounded10,
+        // Lit from above: a sheen over the top half, a shade at the bottom. Translucent, so the
+        // tap ripple on the button still shows through it.
+        backgroundBuilder: (context, states, child) => states.contains(WidgetState.disabled)
+            ? child!
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x2EFFFFFF), Color(0x00FFFFFF), Color(0x14000000)],
+                    stops: [0, 0.55, 1],
+                  ),
+                ),
+                child: child,
+              ),
+      ).copyWith(
+        // A soft canopy shadow under enabled buttons; none when disabled or pressed flat.
+        elevation: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled) || states.contains(WidgetState.pressed) ? 0 : 2,
+        ),
+        shadowColor: const WidgetStatePropertyAll(Color(0x40133025)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(

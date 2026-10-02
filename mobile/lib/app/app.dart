@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'motion.dart';
 import 'router.dart';
 import 'theme.dart';
 
@@ -14,6 +15,7 @@ class AgriGuardApp extends ConsumerWidget {
       routerConfig: ref.watch(routerProvider),
       // Same palette and type roles as the web console (app/theme.dart, docs/design/TOKENS.md).
       theme: buildAgriTheme(),
+      scrollBehavior: const AgriScrollBehavior(),
     );
   }
 }
