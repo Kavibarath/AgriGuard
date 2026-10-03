@@ -73,7 +73,7 @@ export function HomeFooter() {
           <div>
             <h2 className="font-display text-[1.75rem] leading-tight font-semibold">Crop advice, checked for safety</h2>
             <p className="mt-5 text-base leading-relaxed text-brand-100 sm:text-[17px]">
-              A group project for SE3090 at SLIIT, 2026. Farmers use the AgriGuard phone app; agronomists, dealers and administrators use this web console.
+              Farmers use the AgriGuard phone app; agronomists, dealers and administrators use this web console.
             </p>
             <a
               href="#top"
