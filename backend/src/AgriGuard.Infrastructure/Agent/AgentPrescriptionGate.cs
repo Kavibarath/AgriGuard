@@ -4,7 +4,9 @@ using AgriGuard.Application.Agent;
 using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Validation;
+using AgriGuard.Application.Weather;
 using AgriGuard.Domain.Cases;
+using AgriGuard.Domain.Harvest;
 using AgriGuard.Domain.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -21,11 +23,19 @@ namespace AgriGuard.Infrastructure.Agent;
 /// 2. **Real stock.** The validator checks V9 only when it is given stock figures, so the best
 ///    dealer's in-date, unreserved stock is looked up here. "No stock" then fails V9 rather than
 ///    going unchecked.
+/// 3. **The forecast.** V8 needs the weather at the plot on the spray date, judged over the
+///    product's rainfast time. It comes from Open-Meteo through the cached WeatherService; if the
+///    forecast is unavailable or the date is beyond its horizon, V8 is "not evaluated" (§10's
+///    deliberate degradation) rather than the whole check failing.
 ///
 /// Used twice per run: by the validate_prescription tool, and again by the backend when the agent
 /// reports a proposal as ready for approval — the backend never takes the agent's word for it.
 /// </summary>
-public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionValidationService validation, FarmCalendar calendar)
+public sealed class AgentPrescriptionGate(
+    AgriGuardDbContext db,
+    IPrescriptionValidationService validation,
+    IWeatherService weather,
+    FarmCalendar calendar)
 {
     public async Task<AgentVerdictTool> CheckAsync(AgentProposalInput input, CancellationToken ct = default)
     {
@@ -52,8 +62,7 @@ public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionVa
             input.TotalQuantity ?? 0,
             sprayDate,
             dealerId,
-            // V8 is reported as not evaluated until Component D's Open-Meteo client exists.
-            Weather: null,
+            Weather: await LoadWeatherAsync(cropCycleId, productId, sprayDate, ct),
             Stock: await LoadStockAsync(runId, productId, dealerId, districtId, sprayDate, ct)), ct);
 
         return new AgentVerdictTool(verdict.Outcome, verdict.Summary, verdict.Results);
@@ -82,6 +91,39 @@ public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionVa
         && value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)
             ? number
             : null;
+
+    /// <summary>
+    /// The forecast at the plot for the spray date, judged exactly as the spray-window screen judges
+    /// it (<see cref="SprayWeather"/>): wind and heat over the morning application window, rain until
+    /// the product is rainfast. Null — V8 not evaluated — when there is no rule to read the rainfast
+    /// time from (V2 fails anyway), no usable date (V1 fails), or no forecast.
+    /// </summary>
+    private async Task<WeatherInput?> LoadWeatherAsync(Guid cropCycleId, Guid productId, DateOnly sprayDate, CancellationToken ct)
+    {
+        if (sprayDate == default)
+            return null;
+
+        var facts = await db.CropCycles.AsNoTracking()
+            .Where(c => c.Id == cropCycleId)
+            .Select(c => new
+            {
+                c.Plot.Latitude,
+                c.Plot.Longitude,
+                Rainfast = db.ProductCropApprovals
+                    .Where(a => a.ProductId == productId && a.CropId == c.CropId)
+                    .Select(a => (int?)a.RainfastHours)
+                    .FirstOrDefault()
+            })
+            .FirstOrDefaultAsync(ct);
+        if (facts?.Rainfast is not { } rainfastHours)
+            return null;
+
+        if (await weather.ForecastAsync(facts.Latitude, facts.Longitude, ct) is not { } forecast
+            || SprayWeather.Assess(forecast.Hours, sprayDate, rainfastHours) is not { } day)
+            return null;
+
+        return new WeatherInput(day.RainProbabilityPercent, day.WindSpeedKph, day.TemperatureC, day.PrecipitationMm);
+    }
 
     /// <summary>Returns the farm's district, which the stock search is limited to.</summary>
     private async Task<Guid> EnsureRunOwnsCycleAsync(Guid runId, Guid cropCycleId, CancellationToken ct)

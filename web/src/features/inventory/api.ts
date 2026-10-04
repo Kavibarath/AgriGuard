@@ -1,7 +1,7 @@
 import { api } from '@/lib/api'
 import { queryString } from '@/lib/query-string'
 import type { PagedResult } from '@/features/registry/types'
-import type { CropRule, InventoryBatch, Order, OrderStatus, Product, Reservation, ReservationStatus, RuleLimits } from './types'
+import type { CropRule, InventoryBatch, LowStockReport, Order, OrderStatus, Product, Reservation, ReservationStatus, RuleLimits, StockValuation } from './types'
 
 interface PageQuery {
   page?: number
@@ -95,3 +95,10 @@ export const createRule = (input: RuleLimits & { productId: string; cropId: stri
 
 export const updateRule = (id: string, input: RuleLimits) =>
   api<CropRule>(`/api/product-crop-approvals/${id}`, { method: 'PUT', json: input })
+
+// ── Stock reports ────────────────────────────────────────────────────────────
+
+export const getStockValuation = (dealerId?: string) => api<StockValuation>(`/api/reports/stock-valuation${queryString({ dealerId })}`)
+
+export const getLowStock = (query: { dealerId?: string; minPacks?: number } = {}) =>
+  api<LowStockReport>(`/api/reports/low-stock${queryString(query)}`)

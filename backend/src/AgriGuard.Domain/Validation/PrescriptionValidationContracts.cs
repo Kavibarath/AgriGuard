@@ -75,7 +75,12 @@ public sealed record ProductApprovalSnapshot(
 public sealed record AppliedTreatmentFact(Guid ProductId, Guid ActiveIngredientId, DateOnly AppliedOn);
 
 /// <summary>Forecast for the spray date, within the product's rainfast window (V8).</summary>
-public sealed record WeatherAssessment(int RainProbabilityPercent, decimal WindSpeedKph, decimal TemperatureC);
+/// <param name="ExpectedRainMm">
+/// Rain the forecast expects before the spray is rainfast. When known, a high chance of mere drizzle
+/// (under <see cref="PrescriptionSafetyValidator.MinWashOffRainMm"/>) does not fail V8: it cannot wash the
+/// product off. When unknown (null), the probability alone decides, as it always did.
+/// </param>
+public sealed record WeatherAssessment(int RainProbabilityPercent, decimal WindSpeedKph, decimal TemperatureC, decimal? ExpectedRainMm = null);
 
 /// <summary>Dealer stock for the proposed product (V9).</summary>
 public sealed record StockAssessment(decimal AvailableQuantity, DateOnly? EarliestBatchExpiry);

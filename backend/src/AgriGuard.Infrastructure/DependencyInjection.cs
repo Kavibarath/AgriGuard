@@ -2,21 +2,31 @@ using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
 using AgriGuard.Application.Cases;
 using AgriGuard.Application.Common;
+using AgriGuard.Application.Harvest;
+using AgriGuard.Application.Intelligence;
 using AgriGuard.Application.Inventory;
 using AgriGuard.Application.Registry;
+using AgriGuard.Application.Reports;
 using AgriGuard.Application.Validation;
+using AgriGuard.Application.Weather;
 using AgriGuard.Infrastructure.Agent;
 using AgriGuard.Infrastructure.Cases;
+using AgriGuard.Infrastructure.Harvest;
 using AgriGuard.Infrastructure.Identity;
+using AgriGuard.Infrastructure.Intelligence;
 using AgriGuard.Infrastructure.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
 using AgriGuard.Infrastructure.Registry;
+using AgriGuard.Infrastructure.Reports;
 using AgriGuard.Infrastructure.Validation;
+using AgriGuard.Infrastructure.Weather;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
+using Polly;
 
 namespace AgriGuard.Infrastructure;
 
@@ -112,6 +122,49 @@ public static class DependencyInjection
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IOrderService, OrderService>();
 
+        // Component D — Open-Meteo weather (§10), behind a cache and a resilience pipeline
+        services.AddOptions<OpenMeteoOptions>().Bind(configuration.GetSection(OpenMeteoOptions.SectionName));
+        services.AddHttpClient<IWeatherProvider, OpenMeteoClient>((sp, http) =>
+            {
+                http.BaseAddress = sp.GetRequiredService<IOptions<OpenMeteoOptions>>().Value.BaseUrl;
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("AgriGuard/1.0 (SLIIT SE3090 academic project)");
+            })
+            .AddResilienceHandler("open-meteo", pipeline =>
+            {
+                // Outermost first: two retries with jittered backoff; then a breaker that stops
+                // calling for a minute after 5 failures in a row (every sampled call failed); then
+                // a 5-second limit on each single attempt.
+                pipeline.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 2,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    Delay = TimeSpan.FromMilliseconds(300)
+                });
+                pipeline.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
+                {
+                    FailureRatio = 1.0,
+                    MinimumThroughput = 5,
+                    SamplingDuration = TimeSpan.FromMinutes(1),
+                    BreakDuration = TimeSpan.FromMinutes(1)
+                });
+                pipeline.AddTimeout(TimeSpan.FromSeconds(5));
+            });
+        services.AddScoped<IWeatherService, WeatherService>();
+        services.AddScoped<ISprayWindowService, SprayWindowService>();
+
+        // Component D — harvest windows, forecasts and collection logistics
+        services.AddScoped<IHarvestWindowService, HarvestWindowService>();
+        services.AddScoped<IHarvestForecastService, HarvestForecastService>();
+        services.AddScoped<ICollectionService, CollectionService>();
+        services.AddScoped<IOutbreakSignalService, OutbreakSignalService>();
+
+        // Reports (§5.1): one read-only service per owning component's reports
+        services.AddScoped<IHarvestReportService, HarvestReportService>();
+        services.AddScoped<IRegistryReportService, RegistryReportService>();
+        services.AddScoped<ICaseReportService, CaseReportService>();
+        services.AddScoped<IStockReportService, StockReportService>();
+
         services.AddOptions<InventoryOptions>().Bind(configuration.GetSection(InventoryOptions.SectionName));
         // Registered as itself too, so tests can run one sweep on demand.
         services.AddSingleton<ReservationExpirySweeper>();
@@ -128,6 +181,9 @@ public static class DependencyInjection
         {
             await DemoUserSeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), ct);
             await DemoInventorySeeder.SeedAsync(db, TimeProvider.System, ct);
+            await DemoDryZoneSeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), TimeProvider.System, ct);
+            await DemoCollectionSeeder.SeedAsync(db, TimeProvider.System, ct);
+            await DemoHistorySeeder.SeedAsync(db, new Pbkdf2PasswordHasher(), TimeProvider.System, ct);
         }
     }
 }

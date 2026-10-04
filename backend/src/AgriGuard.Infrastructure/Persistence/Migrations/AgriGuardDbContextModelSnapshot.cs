@@ -25,6 +25,8 @@ namespace AgriGuard.Infrastructure.Persistence.Migrations
 
             modelBuilder.HasSequence("case_reference_numbers");
 
+            modelBuilder.HasSequence("collection_booking_numbers");
+
             modelBuilder.HasSequence("input_order_numbers");
 
             modelBuilder.HasSequence("prescription_numbers");

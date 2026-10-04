@@ -80,8 +80,9 @@ ACTION_SYSTEM = (
     "propose a treatment. Rules you must follow: use only a product_id from the list; set "
     "dose_per_hectare within that product's min and max; set total_quantity to dose_per_hectare "
     "multiplied by the plot area in hectares; choose a spray_date that is today or later and "
-    "respects the product's last safe spray date. Products already blocked are marked — do not "
-    "choose them. Explain your choice in one sentence. "
+    "respects the product's last safe spray date; when you are given a list of days whose weather "
+    "suits spraying, the spray_date must be one of them. Products already blocked are marked — do "
+    "not choose them. Explain your choice in one sentence. "
     f"{UNTRUSTED_WARNING}"
 )
 

@@ -284,6 +284,63 @@ class TestSafeFailure:
         action_prompt = next(user for schema, user in llm.prompts if schema == "PrescriptionProposal")
         assert "Today: 2031-01-02." in action_prompt
 
+    async def test_the_forecast_is_evidence_for_diagnosis_and_decides_the_spray_day(
+        self, llm: StubLlm, settings: Settings
+    ) -> None:
+        await execute_run(
+            RunRequest(run_id="run-1", case_id="case-1", objective="o"),
+            llm,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            settings,
+            RecordingReporter(),  # type: ignore[arg-type]
+            StubTools().factory(settings),
+        )
+
+        diagnosis_prompt = next(user for schema, user in llm.prompts if schema == "Diagnosis")
+        action_prompt = next(user for schema, user in llm.prompts if schema == "PrescriptionProposal")
+        assert "last 48 h 12.0 mm rain, average humidity 88%" in diagnosis_prompt
+        assert "spray_date must be one of these): 2026-09-29" in action_prompt
+        assert "2026-09-30" not in action_prompt.split("one of these):")[1].splitlines()[0]
+
+    async def test_no_day_that_suits_spraying_is_a_safe_failure_not_a_guess(
+        self, llm: StubLlm, settings: Settings
+    ) -> None:
+        rainy = {
+            "forecastAvailable": True,
+            "summary": "No day in this period suits spraying.",
+            "days": [{"date": "2026-09-29", "suitable": False}],
+        }
+        result = await execute_run(
+            RunRequest(run_id="run-1", case_id="case-1", objective="o"),
+            llm,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            settings,
+            RecordingReporter(),  # type: ignore[arg-type]
+            StubTools({"get_weather_forecast": rainy}).factory(settings),
+        )
+
+        assert result.outcome == RunOutcome.FAILED
+        assert "No day in the forecast suits spraying" in (result.failure_reason or "")
+
+    async def test_an_unreachable_forecast_does_not_stop_the_run(
+        self, llm: StubLlm, settings: Settings
+    ) -> None:
+        tools = StubTools()
+        tools.failing.add("get_weather_forecast")
+
+        result = await execute_run(
+            RunRequest(run_id="run-1", case_id="case-1", objective="o"),
+            llm,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            settings,
+            RecordingReporter(),  # type: ignore[arg-type]
+            tools.factory(settings),
+        )
+
+        assert result.outcome != RunOutcome.FAILED
+        action_prompt = next(user for schema, user in llm.prompts if schema == "PrescriptionProposal")
+        assert "Weather forecast unavailable" in action_prompt
+
 
 class TestTimeline:
     async def test_every_tool_call_is_recorded_for_the_audit_trail(

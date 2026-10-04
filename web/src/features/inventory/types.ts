@@ -141,3 +141,53 @@ export type RuleLimits = Omit<
   CropRule,
   'id' | 'productId' | 'productName' | 'activeIngredientName' | 'unit' | 'cropId' | 'cropName' | 'updatedAt'
 >
+
+// ── Stock reports (GET /api/reports/stock-valuation, /api/reports/low-stock) ──
+
+export type StockLevelState = 'OutOfStock' | 'Low' | 'Sufficient'
+
+export interface StockValuation {
+  asOf: string
+  batches: number
+  totalValue: number
+  heldValue: number
+  expiredValue: number
+  expiringSoonValue: number
+  byDealer: { dealerId: string; shopName: string; value: number; expiredValue: number }[]
+  byProduct: {
+    dealerId: string
+    shopName: string
+    productId: string
+    productName: string
+    unit: string
+    batches: number
+    quantityOnHand: number
+    quantityReserved: number
+    value: number
+    heldValue: number
+    expiredValue: number
+  }[]
+}
+
+export interface LowStockRow {
+  dealerId: string
+  shopName: string
+  productId: string
+  productName: string
+  unit: ProductUnit
+  packSize: number
+  availableQuantity: number
+  sellablePacks: number
+  heldQuantity: number
+  expiredQuantity: number
+  nextExpiry: string | null
+  state: StockLevelState
+}
+
+export interface LowStockReport {
+  asOf: string
+  minPacks: number
+  outOfStock: number
+  low: number
+  rows: LowStockRow[]
+}

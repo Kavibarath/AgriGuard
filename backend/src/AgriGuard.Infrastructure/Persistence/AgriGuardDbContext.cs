@@ -71,11 +71,15 @@ public class AgriGuardDbContext(
     public const string PrescriptionSequence = "prescription_numbers";
     public const string InputOrderSequence = "input_order_numbers";
 
+    /// <summary>Numbers collection bookings (BK-2026-000001).</summary>
+    public const string CollectionBookingSequence = "collection_booking_numbers";
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasSequence<long>(CaseReferenceSequence);
         modelBuilder.HasSequence<long>(PrescriptionSequence);
         modelBuilder.HasSequence<long>(InputOrderSequence);
+        modelBuilder.HasSequence<long>(CollectionBookingSequence);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgriGuardDbContext).Assembly);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

@@ -22,9 +22,12 @@ public static class PrescriptionSafetyValidator
     /// <summary>Tolerance on the quantity arithmetic (V4): packs come in fixed sizes and get rounded.</summary>
     private const decimal QuantityTolerance = 0.02m;
 
-    private const int MaxRainProbabilityPercent = 40;
-    private const decimal MaxWindSpeedKph = 15m;
-    private const decimal MaxTemperatureC = 32m;
+    public const int MaxRainProbabilityPercent = 40;
+    public const decimal MaxWindSpeedKph = 15m;
+    public const decimal MaxTemperatureC = 32m;
+
+    /// <summary>Less rain than this before the spray is rainfast cannot wash it off, however likely it is.</summary>
+    public const decimal MinWashOffRainMm = 0.5m;
 
     public static ValidationVerdict Validate(
         PrescriptionProposal proposal,
@@ -231,8 +234,14 @@ public static class PrescriptionSafetyValidator
         var weather = context.Weather;
         List<string> problems = [];
 
-        if (weather.RainProbabilityPercent >= MaxRainProbabilityPercent)
-            problems.Add($"{weather.RainProbabilityPercent}% chance of rain within the {approval.RainfastHours}-hour rainfast window");
+        // Rain matters when it is likely AND enough to wash the product off. A 50% chance of 0.2 mm
+        // of drizzle is not a reason to refuse; a 50% chance of 4 mm is. With no rainfall figure,
+        // the probability alone decides.
+        var meaningfulRain = weather.ExpectedRainMm is not { } mm || mm >= MinWashOffRainMm;
+        if (weather.RainProbabilityPercent >= MaxRainProbabilityPercent && meaningfulRain)
+            problems.Add(weather.ExpectedRainMm is { } expected
+                ? $"{weather.RainProbabilityPercent}% chance of {expected:0.#} mm of rain within the {approval.RainfastHours}-hour rainfast window"
+                : $"{weather.RainProbabilityPercent}% chance of rain within the {approval.RainfastHours}-hour rainfast window");
         if (weather.WindSpeedKph >= MaxWindSpeedKph)
             problems.Add($"wind {weather.WindSpeedKph} km/h would cause spray drift");
         if (weather.TemperatureC > MaxTemperatureC)
@@ -240,10 +249,10 @@ public static class PrescriptionSafetyValidator
 
         return problems.Count == 0
             ? Pass("V8", name, RuleSeverity.Revise,
-                $"Forecast is suitable: {weather.RainProbabilityPercent}% rain, {weather.WindSpeedKph} km/h wind, {weather.TemperatureC} °C.")
+                $"Forecast is suitable: {weather.RainProbabilityPercent}% rain{(weather.ExpectedRainMm is { } mm2 ? $" ({mm2:0.#} mm)" : "")}, {weather.WindSpeedKph} km/h wind, {weather.TemperatureC} °C.")
             : Fail("V8", name, RuleSeverity.Revise,
                 $"The forecast does not suit spraying: {string.Join("; ", problems)}.",
-                $"rain={weather.RainProbabilityPercent}%; wind={weather.WindSpeedKph}kph; temp={weather.TemperatureC}C; " +
+                $"rain={weather.RainProbabilityPercent}%; rainMm={weather.ExpectedRainMm?.ToString("0.#") ?? "unknown"}; wind={weather.WindSpeedKph}kph; temp={weather.TemperatureC}C; " +
                 $"rainfastHours={approval.RainfastHours}");
     }
 

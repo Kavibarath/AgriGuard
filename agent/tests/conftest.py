@@ -131,6 +131,13 @@ DEFAULT_TOOL_RESPONSES: dict[str, Any] = {
             {"productId": "product-mancozeb", "canSprayToday": True, "lastSafeSprayDate": "2026-10-25"}
         ],
     },
+    "get_weather_forecast": {
+        "forecastAvailable": True,
+        "summary": "Suitable to spray on Tue 29 Sep. Not suitable: Wed 30 Sep (85% chance of 4 mm of rain).",
+        "recentRainMm": 12.0,
+        "recentHumidityPercent": 88,
+        "days": [{"date": "2026-09-29", "suitable": True}, {"date": "2026-09-30", "suitable": False}],
+    },
     "check_stock_availability": {"availableQuantity": 10.0},
     "get_product_pricing": {"unitPrice": 2400.0, "packSize": 1.0},
     "validate_prescription": {

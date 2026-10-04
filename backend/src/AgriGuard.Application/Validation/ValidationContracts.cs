@@ -18,7 +18,7 @@ public sealed record ValidatePrescriptionRequest(
     // Dealer stock for the product. Absent leaves V9 unevaluated.
     StockInput? Stock = null);
 
-public sealed record WeatherInput(int RainProbabilityPercent, decimal WindSpeedKph, decimal TemperatureC);
+public sealed record WeatherInput(int RainProbabilityPercent, decimal WindSpeedKph, decimal TemperatureC, decimal? ExpectedRainMm = null);
 
 public sealed record StockInput(decimal AvailableQuantity, DateOnly? EarliestBatchExpiry);
 

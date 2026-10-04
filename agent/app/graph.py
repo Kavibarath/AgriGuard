@@ -50,6 +50,19 @@ from .tools import EventSink, ToolClient, ToolError
 log = structlog.get_logger(__name__)
 
 
+def describe_recent_weather(weather: dict[str, Any]) -> str:
+    """One line of weather evidence for the Diagnosis agent; says so plainly when there is none."""
+    if not weather.get("forecastAvailable"):
+        return "Weather at the plot: unavailable."
+    recent = (
+        f"last 48 h {weather.get('recentRainMm')} mm rain, average humidity "
+        f"{weather.get('recentHumidityPercent')}%"
+        if weather.get("recentRainMm") is not None
+        else "recent conditions unknown"
+    )
+    return f"Weather at the plot: {recent}. Coming days: {weather.get('summary', '')}"
+
+
 class RunState(TypedDict, total=False):
     """Shared state threaded through the graph. Everything the console later shows is in here."""
 
@@ -60,6 +73,8 @@ class RunState(TypedDict, total=False):
 
     case: dict[str, Any]
     safety_profile: dict[str, Any]
+    # The plot's forecast, fetched by Diagnosis and read by Action to pick a spray day.
+    weather: dict[str, Any]
     plan: Plan
     diagnosis: Diagnosis
     proposal: PrescriptionProposal
@@ -136,6 +151,12 @@ def build_graph(deps: GraphDependencies) -> Any:
         outbreak = await tools.call(
             "get_regional_outbreak_signal", cropId=case["cropId"], districtId=case["districtId"]
         )
+        # Weather is evidence, not a precondition: wet, humid days favour fungal disease. If the
+        # forecast cannot be had, the diagnosis goes ahead without it.
+        try:
+            weather = await tools.call("get_weather_forecast", plotId=case["plotId"], days=14)
+        except ToolError:
+            weather = {}
 
         note, _ = sanitise_farmer_note(case.get("farmerNote"), deps.settings.max_farmer_note_chars)
         candidates = case.get("candidatePathogens", [])
@@ -149,6 +170,7 @@ def build_graph(deps: GraphDependencies) -> Any:
             f"{', '.join(f'{c["code"]}={c["commonName"]}' for c in candidates) or 'none'}\n"
             f"Recent treatments on this crop: {history.get('summary', 'none')}\n"
             f"District disease pressure: {outbreak.get('summary', 'no signal')}\n"
+            f"{describe_recent_weather(weather)}\n"
             f"{fence('farmer_note', note or 'none')}",
         )
 
@@ -156,7 +178,7 @@ def build_graph(deps: GraphDependencies) -> Any:
             "StepCompleted",
             {"agentRole": AgentRole.DIAGNOSIS.value, "sequenceNo": 2, "payload": result.model_dump()},
         )
-        return {**state, "diagnosis": result}
+        return {**state, "diagnosis": result, "weather": weather}
 
     async def action(state: RunState) -> RunState:
         revisions = state.get("revisions", 0)
@@ -189,6 +211,17 @@ def build_graph(deps: GraphDependencies) -> Any:
         if not options:
             raise ToolError("No approved product can be sprayed on this plot today.")
 
+        # The same forecast judgement as rule V8: proposing any other day only earns a revision.
+        weather = state.get("weather") or {}
+        spray_days = [d["date"] for d in weather.get("days", []) if d.get("suitable")]
+        if weather.get("forecastAvailable") and not spray_days:
+            raise ToolError(f"No day in the forecast suits spraying. {weather.get('summary', '')}".strip())
+        weather_line = (
+            f"Days whose weather suits spraying (spray_date must be one of these): {', '.join(spray_days)}\n"
+            if spray_days
+            else "Weather forecast unavailable: choose the earliest safe date.\n"
+        )
+
         guidance = ""
         if (verdict := state.get("verdict")) is not None:
             guidance = (
@@ -208,6 +241,7 @@ def build_graph(deps: GraphDependencies) -> Any:
             # (UTC is still yesterday in Sri Lanka before 05:30). Own clock only as a fallback.
             f"Today: {safety.get('today') or datetime.now(UTC).date().isoformat()}. "
             f"Planned harvest: {safety.get('harvestDate')}\n"
+            f"{weather_line}"
             f"Approved products:\n{options}\n{guidance}",
         )
 
