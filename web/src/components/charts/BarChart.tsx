@@ -83,7 +83,7 @@ export function BarChart({ data, series, caption, valueLabel = 'cases' }: { data
                 stroke={t === 0 ? 'var(--color-chart-axis)' : 'var(--color-chart-grid)'}
                 strokeWidth={1}
               />
-              <text x={MARGIN.left - 6} y={y(t)} dy="0.32em" textAnchor="end" className="fill-stone-500 text-[11px] tabular-nums">
+              <text x={MARGIN.left - 6} y={y(t)} dy="0.32em" textAnchor="end" className="fill-stone-600 text-xs tabular-nums">
                 {t}
               </text>
             </g>
@@ -109,7 +109,7 @@ export function BarChart({ data, series, caption, valueLabel = 'cases' }: { data
                   )
                 })}
                 {labelled(i) && (
-                  <text x={x + barWidth / 2} y={HEIGHT - 6} textAnchor="middle" className="fill-stone-500 text-[11px]">
+                  <text x={x + barWidth / 2} y={HEIGHT - 6} textAnchor="middle" className="fill-stone-600 text-xs">
                     {d.label}
                   </text>
                 )}
@@ -131,7 +131,7 @@ export function BarChart({ data, series, caption, valueLabel = 'cases' }: { data
         {active !== null && (
           <div
             role="tooltip"
-            className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-xs shadow-md"
+            className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border-subtle bg-surface-card px-2.5 py-1 shadow-lifted.5 text-xs shadow-md"
             style={{ left: `${((MARGIN.left + active * band + band / 2) / WIDTH) * 100}%` }}
           >
             <p className="font-medium text-stone-900">{data[active].label}</p>

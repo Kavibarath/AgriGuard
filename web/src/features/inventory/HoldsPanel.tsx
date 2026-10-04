@@ -40,7 +40,7 @@ export function HoldsPanel() {
       render: (r) => (
         <div>
           <p className="font-medium text-stone-900">{r.productName}</p>
-          {r.note && <p className="text-xs text-stone-500">{r.note}</p>}
+          {r.note && <p className="text-xs text-stone-600">{r.note}</p>}
         </div>
       ),
     },
@@ -52,7 +52,7 @@ export function HoldsPanel() {
       header: '',
       render: (r) =>
         r.agentRunId ? (
-          <span className="text-xs text-stone-500">For a prescription awaiting approval</span>
+          <span className="text-xs text-stone-600">For a prescription awaiting approval</span>
         ) : (
           <div className="flex justify-end gap-1">
             <Button variant="ghost" className="h-8 px-2" loading={acting === r.id && commit.isPending} onClick={() => act(r.id, commit)}>
@@ -69,7 +69,7 @@ export function HoldsPanel() {
   return (
     <section aria-labelledby="holds-heading" className="space-y-3">
       <div>
-        <h2 id="holds-heading" className="text-lg font-semibold text-stone-900">
+        <h2 id="holds-heading" className="font-display text-xl font-semibold text-stone-900">
           Stock on hold
         </h2>
         <p className="text-sm text-stone-600">Held stock stays on the shelf but cannot be sold to anyone else. Unresolved holds are released after 24 hours.</p>
@@ -77,9 +77,9 @@ export function HoldsPanel() {
       {error && <Alert tone="error">{userMessage(error)}</Alert>}
       <AsyncBoundary isPending={holds.isPending} error={holds.error} onRetry={holds.refetch} label="Loading holds">
         {holds.data?.items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-stone-300 px-4 py-6 text-center text-sm text-stone-600">Nothing is on hold.</p>
+          <p className="rounded-xl border border-dashed border-earth-200 bg-earth-50/50 px-4 py-6 text-center text-sm text-stone-600">Nothing is on hold.</p>
         ) : (
-          <DataTable caption="Stock on hold" columns={columns} rows={holds.data?.items ?? []} rowKey={(r) => r.id} />
+          <DataTable tone="earth" caption="Stock on hold" columns={columns} rows={holds.data?.items ?? []} rowKey={(r) => r.id} />
         )}
       </AsyncBoundary>
     </section>

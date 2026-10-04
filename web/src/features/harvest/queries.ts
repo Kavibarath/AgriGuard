@@ -8,6 +8,7 @@ export const harvestKeys = {
   centres: (districtId?: string) => ['harvest', 'centres', districtId ?? 'all'] as const,
   slots: (query: harvest.SlotQuery) => ['harvest', 'slots', query] as const,
   bookings: (query: harvest.BookingQuery) => ['harvest', 'bookings', query] as const,
+  sprayWindow: (plotId: string) => ['harvest', 'spray-window', plotId] as const,
 }
 
 export const useForecasts = (query: harvest.ForecastQuery) =>
@@ -24,6 +25,15 @@ export const useSlots = (query: harvest.SlotQuery) =>
 
 export const useBookings = (query: harvest.BookingQuery) =>
   useQuery({ queryKey: harvestKeys.bookings(query), queryFn: () => harvest.listBookings(query) })
+
+/** Forecasts change a few times a day; the API caches them for three hours, so a few minutes here is plenty. */
+export const useSprayWindow = (plotId: string | undefined) =>
+  useQuery({
+    queryKey: harvestKeys.sprayWindow(plotId ?? 'none'),
+    queryFn: () => harvest.getSprayWindow(plotId!),
+    enabled: Boolean(plotId),
+    staleTime: 10 * 60_000,
+  })
 
 /** A recorded yield changes the forecast list and the report; a new slot changes the planner. Refresh the subtree. */
 function useHarvestMutation<TArgs, TResult>(mutationFn: (args: TArgs) => Promise<TResult>) {

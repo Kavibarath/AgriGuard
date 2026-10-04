@@ -1,8 +1,8 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { API_BASE_URL } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/auth-store'
 import { agronomist, authResponse, farmer, http, HttpResponse, server } from '@/test/msw'
-import { makeSignal } from '@/test/harvest-handlers'
+import { makeSignal, makeSprayWindow } from '@/test/harvest-handlers'
 import { admin, dealer } from '@/test/inventory-handlers'
 import { renderApp } from '@/test/render'
 
@@ -49,5 +49,35 @@ describe('DashboardPage', () => {
 
     await screen.findByText('Disease pressure · Nuwara Eliya')
     await waitFor(() => expect(screen.queryByText('Stock on the shelf')).not.toBeInTheDocument())
+  })
+
+  it('puts the agronomist’s queue beside the spray weather at the longest-waiting plot', async () => {
+    useAuthStore.getState().setSession(authResponse(agronomist))
+    renderApp('/dashboard')
+
+    const queue = await screen.findByRole('region', { name: 'Proposals awaiting your decision' })
+    expect(await within(queue).findByRole('link', { name: 'AG-2026-000003' })).toHaveAttribute('href', '/agent-runs/run-1')
+    const weather = await screen.findByRole('region', { name: 'Spray weather' })
+    expect(await within(weather).findAllByText('Suits spraying')).toHaveLength(2)
+    // The reason in two words, and the rule's full sentence for screen readers.
+    expect(within(weather).getByText('Rain likely')).toBeInTheDocument()
+    expect(within(weather).getByText(': Rain likely (80%, 9.4 mm)')).toBeInTheDocument()
+  })
+
+  it('says when the forecast is unavailable instead of guessing', async () => {
+    server.use(http.get(`${API_BASE_URL}/api/weather/spray-window`, () => HttpResponse.json(makeSprayWindow({ forecastAvailable: false, days: [] }))))
+    useAuthStore.getState().setSession(authResponse(farmer))
+    renderApp('/dashboard')
+
+    expect(await screen.findByText('No forecast right now')).toBeInTheDocument()
+  })
+
+  it('gives a dealer the orders to pack and what is running low', async () => {
+    useAuthStore.getState().setSession(authResponse(dealer))
+    renderApp('/dashboard')
+
+    expect(await screen.findByRole('region', { name: 'Orders to pack' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Running low' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Spray weather' })).not.toBeInTheDocument()
   })
 })

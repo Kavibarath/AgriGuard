@@ -101,4 +101,22 @@ describe('LoginPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/rate limit exceeded/i)
   })
+
+  it('offers no demo accounts: every sign-in is typed', () => {
+    renderApp('/login')
+
+    expect(screen.queryByText(/demo account/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('agronomist@agriguard.demo')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+  })
+
+  it('links back to the home page', async () => {
+    const user = userEvent.setup()
+    const { router } = renderApp('/login')
+
+    await user.click(screen.getByRole('link', { name: 'Back to the AgriGuard home page' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: /Crop advice you can trust/ })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
+  })
 })

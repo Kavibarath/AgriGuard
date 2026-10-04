@@ -31,6 +31,7 @@ export function DataTable<T>({
   onSortChange,
   onRowClick,
   caption,
+  tone = 'canopy',
 }: {
   columns: Column<T>[]
   rows: T[]
@@ -39,6 +40,8 @@ export function DataTable<T>({
   onSortChange?: (next: SortState) => void
   onRowClick?: (row: T) => void
   caption: string
+  /** `earth` for the dealer's stock and orders: soil-toned header and stripes. */
+  tone?: 'canopy' | 'earth'
 }) {
   const toggleSort = (key: string) => {
     if (!onSortChange) return
@@ -46,16 +49,23 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
-      <table className="w-full text-sm">
+    // Scrolls sideways on narrow screens; on wide ones it does not clip, so the header can stick
+    // under the top bar while the page scrolls.
+    <div className="card-raised overflow-x-auto rounded-xl border border-border-subtle bg-surface-card lg:overflow-x-visible">
+      <table className="w-full border-separate border-spacing-0 text-sm">
         <caption className="sr-only">{caption}</caption>
-        <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-600">
+        <thead className="text-left text-xs text-stone-600">
           <tr>
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
-                className={cn('px-3 py-2 font-medium', column.numeric && 'text-right', column.secondary && 'hidden sm:table-cell')}
+                className={cn(
+                  'sticky top-14 z-10 h-10 border-b border-border-subtle px-3 font-semibold whitespace-nowrap first:rounded-tl-xl last:rounded-tr-xl',
+                  tone === 'earth' ? 'bg-earth-50 text-earth-800' : 'bg-surface-sunken',
+                  column.numeric && 'text-right',
+                  column.secondary && 'hidden sm:table-cell',
+                )}
                 // Announces the current sort to screen readers, not just the arrow glyph.
                 aria-sort={
                   sort?.sortBy === column.key ? (sort.desc ? 'descending' : 'ascending') : undefined
@@ -65,10 +75,10 @@ export function DataTable<T>({
                   <button
                     type="button"
                     onClick={() => toggleSort(column.key)}
-                    className="inline-flex items-center gap-1 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className="inline-flex items-center gap-1 rounded-sm hover:text-stone-900"
                   >
                     {column.header}
-                    <span aria-hidden="true" className="text-stone-400">
+                    <span aria-hidden="true" className={sort?.sortBy === column.key ? 'text-brand-700' : 'text-stone-400'}>
                       {sort?.sortBy === column.key ? (sort.desc ? '▾' : '▴') : '↕'}
                     </span>
                   </button>
@@ -79,17 +89,21 @@ export function DataTable<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-stone-100">
+        <tbody className="[&>tr:last-child>td]:border-b-0">
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={cn(onRowClick && 'cursor-pointer hover:bg-stone-50')}
+              className={cn(tone === 'earth' ? 'even:bg-earth-50/60' : 'even:bg-surface-sunken/70', onRowClick && 'cursor-pointer hover:bg-brand-50')}
             >
               {columns.map((column) => (
                 <td
                   key={column.key}
-                  className={cn('px-3 py-2 align-middle', column.numeric && 'text-right tabular-nums', column.secondary && 'hidden sm:table-cell')}
+                  className={cn(
+                    'h-11 border-b border-border-subtle px-3 py-1.5 align-middle',
+                    column.numeric && 'text-right whitespace-nowrap tabular-nums',
+                    column.secondary && 'hidden sm:table-cell',
+                  )}
                 >
                   {column.render(row)}
                 </td>
@@ -122,10 +136,10 @@ export function Pagination({
         Page {page} of {totalPages} · {totalCount} total
       </p>
       <div className="flex gap-2">
-        <Button variant="secondary" className="h-8" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+        <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
           Previous
         </Button>
-        <Button variant="secondary" className="h-8" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+        <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
           Next
         </Button>
       </div>

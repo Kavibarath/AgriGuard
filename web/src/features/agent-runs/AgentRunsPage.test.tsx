@@ -24,7 +24,8 @@ describe('AgentRunsPage', () => {
     expect(link).toHaveAttribute('href', `/agent-runs/${RUN_ID}`)
     const row = screen.getByRole('row', { name: /AG-2026-000003/ })
     expect(within(row).getAllByText('Awaiting approval').length).toBeGreaterThan(0)
-    expect(requests[0]).toContain('status=PendingApproval')
+    // The top bar's bell asks for its own count, so look for the page's request, not the first.
+    expect(requests.some((query) => query.includes('status=PendingApproval'))).toBe(true)
   })
 
   it('asks the API for the chosen view, and for everything under "All cases"', async () => {

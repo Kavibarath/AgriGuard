@@ -1,5 +1,7 @@
 import { useId, type ReactNode, type SelectHTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
+import { controlClass } from './control'
+import { FieldError } from './field'
 
 export interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'> {
   label: string
@@ -23,21 +25,12 @@ export function SelectField({ label, error, className, children, ref, ...props }
         ref={ref}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
-        className={cn(
-          'block h-10 w-full rounded-md border bg-white px-3 text-sm shadow-xs',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
-          error ? 'border-red-500 focus-visible:ring-red-500' : 'border-stone-300 focus-visible:ring-brand-500',
-          className,
-        )}
+        className={cn(controlClass, 'pr-8', error ? 'border-danger' : 'border-border-strong', className)}
         {...props}
       >
         {children}
       </select>
-      {error && (
-        <p id={errorId} role="alert" className="text-xs text-red-600">
-          {error}
-        </p>
-      )}
+      {error && <FieldError id={errorId}>{error}</FieldError>}
     </div>
   )
 }

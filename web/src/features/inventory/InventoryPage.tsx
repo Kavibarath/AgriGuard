@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
+import { FilterBar } from '@/components/layout/FilterBar'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Alert } from '@/components/ui/alert'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { Button } from '@/components/ui/button'
@@ -11,6 +13,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { expiryTone } from '@/components/ui/status-tones'
 import { BatchFormModal } from './BatchFormModal'
 import { formatLkr, formatQuantity, isoToday } from './format'
+import { ExpiryWatch, ShelfTiles } from './DealerPanels'
 import { HoldsPanel } from './HoldsPanel'
 import { HoldStockModal } from './HoldStockModal'
 import { useBatches } from './queries'
@@ -73,7 +76,7 @@ export function InventoryPage() {
       render: (b) => (
         <div>
           <p className="font-medium text-stone-900">{b.productName}</p>
-          <p className="text-xs text-stone-500">Batch {b.batchNo}</p>
+          <p className="text-xs text-stone-600">Batch {b.batchNo}</p>
         </div>
       ),
     },
@@ -83,11 +86,11 @@ export function InventoryPage() {
       sortable: true,
       render: (b) => (
         <div className="space-y-0.5">
-          <p className="tabular-nums">{b.expiryDate}</p>
-          <p className="flex items-center gap-1.5 text-xs text-stone-500">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="whitespace-nowrap tabular-nums">{b.expiryDate}</span>
             <StatusBadge label={expiryLabels[b.expiryState]} tone={expiryTone[b.expiryState]} />
-            {b.expiryState !== 'InDate' && expiryNote(b)}
           </p>
+          {b.expiryState !== 'InDate' && <p className="text-xs whitespace-nowrap text-stone-600">{expiryNote(b)}</p>}
         </div>
       ),
     },
@@ -117,87 +120,93 @@ export function InventoryPage() {
   const shopName = batches.data?.items[0]?.shopName
 
   return (
-    <main className="mx-auto max-w-6xl space-y-8 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-1">
-          <Link to="/dashboard" className="text-sm text-stone-500 hover:text-stone-800">
-            ← Dashboard
-          </Link>
-          <h1 className="text-2xl font-semibold text-stone-900">Inventory</h1>
-          <p className="text-sm text-stone-600">{shopName ? `${shopName} — ` : ''}batches on your shelf, soonest expiry first.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setHolding(true)}>
-            Hold stock
-          </Button>
-          <Button onClick={() => setEditing('new')}>Receive delivery</Button>
-        </div>
-      </header>
+    <div className="space-y-4 pb-4">
+      <PageHeader
+        title="Inventory"
+        description={`${shopName ? `${shopName} — ` : ''}batches on your shelf, soonest expiry first.`}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setHolding(true)}>
+              Hold stock
+            </Button>
+            <Button onClick={() => setEditing('new')}>Receive delivery</Button>
+          </>
+        }
+      />
+
+      <ShelfTiles expiringCount={expiring.data?.totalCount} />
 
       {expiringCount > 0 && view.value !== 'expiring' && (
         <Alert tone="warning" title={`${expiringCount} batch(es) expire within ${WARNING_DAYS} days or have expired`}>
           <p>Sell these first or return them to the supplier. Expired stock is never offered to a prescription.</p>
-          <Button variant="secondary" className="mt-2 h-8" onClick={() => updateParams({ view: 'expiring' })}>
+          <Button variant="secondary" size="sm" className="mt-2" onClick={() => updateParams({ view: 'expiring' })}>
             Show them
           </Button>
         </Alert>
       )}
 
-      <section aria-labelledby="batches-heading" className="space-y-3">
-        <h2 id="batches-heading" className="sr-only">
-          Batches
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-[16rem_18rem]">
-          <SelectField label="Show" value={view.value} onChange={(event) => updateParams({ view: event.target.value })}>
-            {views.map((v) => (
-              <option key={v.value} value={v.value}>
-                {v.label}
-              </option>
-            ))}
-          </SelectField>
-          <Field
-            label="Search"
-            type="search"
-            placeholder="Product or batch number"
-            defaultValue={query.search ?? ''}
-            onChange={(event) => updateParams({ search: event.target.value || undefined })}
-          />
-        </div>
-
-        <AsyncBoundary isPending={batches.isPending} error={batches.error} onRetry={batches.refetch} label="Loading stock">
-          {batches.data?.items.length === 0 ? (
-            <EmptyState
-              title={query.search ? 'No batches match that search' : view.value === 'expiring' ? 'Nothing is close to expiry' : 'Your shelf is empty'}
-              description={
-                query.search || view.value === 'expiring' ? 'Try another view or search.' : 'Add a delivery to start selling through AgriGuard.'
-              }
-              action={!query.search && view.value === 'stock' ? <Button onClick={() => setEditing('new')}>Receive delivery</Button> : undefined}
+      <div className="grid items-start gap-4 xl:grid-cols-12">
+        <section aria-labelledby="batches-heading" className="space-y-3 xl:col-span-9">
+          <h2 id="batches-heading" className="sr-only">
+            Batches
+          </h2>
+          <FilterBar className="border-earth-100 bg-earth-50/70 sm:grid-cols-[16rem_18rem]">
+            <SelectField label="Show" value={view.value} onChange={(event) => updateParams({ view: event.target.value })}>
+              {views.map((v) => (
+                <option key={v.value} value={v.value}>
+                  {v.label}
+                </option>
+              ))}
+            </SelectField>
+            <Field
+              label="Search"
+              type="search"
+              placeholder="Product or batch number"
+              defaultValue={query.search ?? ''}
+              onChange={(event) => updateParams({ search: event.target.value || undefined })}
             />
-          ) : (
-            <div className="space-y-3">
-              <DataTable
-                caption="Batches on the shelf"
-                columns={columns}
-                rows={batches.data?.items ?? []}
-                rowKey={(b) => b.id}
-                sort={{ sortBy: query.sortBy, desc: query.desc }}
-                onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : undefined })}
+          </FilterBar>
+
+          <AsyncBoundary isPending={batches.isPending} error={batches.error} onRetry={batches.refetch} label="Loading stock">
+            {batches.data?.items.length === 0 ? (
+              <EmptyState
+                title={query.search ? 'No batches match that search' : view.value === 'expiring' ? 'Nothing is close to expiry' : 'Your shelf is empty'}
+                description={
+                  query.search || view.value === 'expiring' ? 'Try another view or search.' : 'Add a delivery to start selling through AgriGuard.'
+                }
+                action={!query.search && view.value === 'stock' ? <Button onClick={() => setEditing('new')}>Receive delivery</Button> : undefined}
               />
-              <Pagination
-                page={batches.data?.page ?? 1}
-                totalPages={batches.data?.totalPages ?? 1}
-                totalCount={batches.data?.totalCount ?? 0}
-                onPageChange={(page) => updateParams({ page: String(page) })}
-              />
-            </div>
-          )}
-        </AsyncBoundary>
-      </section>
+            ) : (
+              <div className="space-y-3">
+                <DataTable
+                  tone="earth"
+                  caption="Batches on the shelf"
+                  columns={columns}
+                  rows={batches.data?.items ?? []}
+                  rowKey={(b) => b.id}
+                  sort={{ sortBy: query.sortBy, desc: query.desc }}
+                  onSortChange={(next) => updateParams({ sortBy: next.sortBy, desc: next.desc ? 'true' : undefined })}
+                />
+                <Pagination
+                  page={batches.data?.page ?? 1}
+                  totalPages={batches.data?.totalPages ?? 1}
+                  totalCount={batches.data?.totalCount ?? 0}
+                  onPageChange={(page) => updateParams({ page: String(page) })}
+                />
+              </div>
+            )}
+          </AsyncBoundary>
+        </section>
+
+        <aside className="xl:sticky xl:top-20 xl:col-span-3">
+          <ExpiryWatch warningDays={WARNING_DAYS} />
+        </aside>
+      </div>
 
       <HoldsPanel />
 
       <BatchFormModal open={editing !== null} batch={editing === 'new' ? undefined : (editing ?? undefined)} onClose={() => setEditing(null)} />
       <HoldStockModal open={holding} onClose={() => setHolding(false)} />
-    </main>
+    </div>
   )
 }

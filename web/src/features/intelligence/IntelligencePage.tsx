@@ -1,4 +1,8 @@
-import { Link, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
+import { FilterBar } from '@/components/layout/FilterBar'
+import { PageHeader, Panel, PanelHeader } from '@/components/layout/PageHeader'
+import { Pulse } from '@/components/icons'
+import { TileMap, type PinTone } from '@/components/map/TileMap'
 import { BarChart } from '@/components/charts/BarChart'
 import { HBarList } from '@/components/charts/HBarList'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
@@ -10,8 +14,9 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { pressureTone } from '@/components/ui/status-tones'
 import { useCrops, useDistricts } from '@/features/registry/queries'
 import { shortDay } from '@/lib/dates'
+import { cn } from '@/lib/utils'
 import { useOutbreakSignal } from './queries'
-import { levelLabels, trendLabels, type DistrictPressure } from './types'
+import { levelLabels, trendLabels, type DistrictPressure, type PressureLevel } from './types'
 
 const windows = [7, 14, 30, 90]
 
@@ -78,16 +83,10 @@ export function IntelligencePage() {
   ]
 
   return (
-    <main className="mx-auto max-w-6xl space-y-8 p-6">
-      <header className="space-y-1">
-        <Link to="/dashboard" className="text-sm text-stone-500 hover:text-stone-800">
-          ← Dashboard
-        </Link>
-        <h1 className="text-2xl font-semibold text-stone-900">Disease intelligence</h1>
-        <p className="text-sm text-stone-600">Outbreak pressure from cases agronomists have confirmed, by district and crop.</p>
-      </header>
+    <div className="space-y-4 pb-4">
+      <PageHeader title="Disease intelligence" description="Outbreak pressure from cases agronomists have confirmed, by district and crop." />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <FilterBar className="sm:grid-cols-3 lg:grid-cols-[14rem_14rem_12rem]">
         <SelectField label="Crop" value={query.cropId ?? ''} onChange={(e) => updateParams({ cropId: e.target.value || undefined })}>
           <option value="">All crops</option>
           {crops.data?.map((c) => (
@@ -111,23 +110,26 @@ export function IntelligencePage() {
             </option>
           ))}
         </SelectField>
-      </div>
+      </FilterBar>
 
       <AsyncBoundary isPending={signal.isPending} error={signal.error} onRetry={signal.refetch} label="Working out disease pressure">
         {s && s.reportedCases === 0 && s.districts.length === 0 ? (
           <EmptyState title="No cases reported in this window" description="Try a longer window, another crop or all districts." />
         ) : (
           s && (
-            <div className="space-y-8">
-              <p className="rounded-md border border-stone-200 bg-white px-4 py-3 text-sm text-stone-800">{s.summary}</p>
+            <div className="space-y-4">
+              <p className="flex items-start gap-2 rounded-xl border border-border-subtle bg-surface-card px-4 py-3 text-sm text-stone-800">
+                <Pulse size={18} className="mt-px shrink-0 text-brand-600" />
+                {s.summary}
+              </p>
 
-              <section aria-label="Headline figures" className="grid gap-4 sm:grid-cols-3">
+              <section aria-label="Headline figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatTile
                   label="Pressure index"
                   value={
                     <span className="flex items-baseline gap-2">
                       <span>{s.pressureIndex}</span>
-                      <span className="text-sm font-normal text-stone-500">/ 100</span>
+                      <span className="font-sans text-sm font-normal text-stone-600">/ 100</span>
                     </span>
                   }
                   detail={
@@ -147,54 +149,95 @@ export function IntelligencePage() {
                   value={<span className="text-xl">{top ? top.name : 'None confirmed'}</span>}
                   detail={top ? `${top.sharePercent}% of the pressure · ${top.confirmedCases} confirmed` : 'No diagnosis confirmed in this window.'}
                 />
+                <StatTile
+                  label="Districts reporting"
+                  value={s.districts.length}
+                  detail={`${s.districts.filter((d) => d.level === 'High' || d.level === 'Severe').length} at high or severe pressure`}
+                />
               </section>
 
-              <section className="grid gap-8 rounded-lg border border-stone-200 bg-white p-4 lg:grid-cols-[3fr_2fr]">
-                <BarChart
-                  caption={`Cases per day, last ${s.windowDays} days`}
-                  series={[
-                    { key: 'confirmed', label: 'Confirmed', color: 'var(--color-series-1)' },
-                    { key: 'unconfirmed', label: 'Reported, not yet confirmed', color: 'var(--color-series-2)' },
-                  ]}
-                  data={s.daily.map((d) => ({ label: shortDay(d.date), values: [d.confirmedCases, d.reportedCases - d.confirmedCases] }))}
-                />
-                {s.topPathogens.length > 0 ? (
-                  <HBarList
-                    caption="Share of the pressure, by pathogen"
-                    max={100}
-                    items={s.topPathogens.map((p) => ({
-                      key: p.code,
-                      label: p.name,
-                      value: p.sharePercent,
-                      display: `${p.sharePercent}%`,
-                      note: `${p.confirmedCases} confirmed · last ${shortDay(p.lastReportedOn)}`,
+              <div className="grid items-start gap-4 xl:grid-cols-12">
+                <Panel raised aria-labelledby="map-heading" className="xl:col-span-7">
+                  <PanelHeader id="map-heading" title="Outbreak map" description="Each district at its centre, coloured and sized by pressure. Select one to focus on it." />
+                  <TileMap
+                    label="Map of disease pressure by district"
+                    height={380}
+                    maxFitZoom={10}
+                    pins={s.districts.map((d) => ({
+                      id: d.districtId,
+                      position: { lat: d.latitude, lng: d.longitude },
+                      label: `${d.districtName}: ${levelLabels[d.level].toLowerCase()} pressure, ${d.pressureIndex} of 100, ${d.confirmedCases} confirmed`,
+                      tone: ramp[d.level].tone,
+                      size: ramp[d.level].size,
+                      selected: d.districtId === query.districtId,
+                      href: `?${withDistrict(params, d.districtId)}`,
                     }))}
                   />
-                ) : (
-                  <p className="text-sm text-stone-600">No pathogen confirmed yet: the reports are waiting for an agronomist.</p>
-                )}
-              </section>
+                  <ul aria-label="Pressure levels" className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-700">
+                    {(['Low', 'Moderate', 'High', 'Severe'] as PressureLevel[]).map((level) => (
+                      <li key={level} className="inline-flex items-center gap-1.5">
+                        <span aria-hidden="true" className={cn('inline-block rounded-full ring-2 ring-white', ramp[level].swatch)} />
+                        {levelLabels[level]}
+                        {level === 'Low' && ' or none'}
+                      </li>
+                    ))}
+                  </ul>
+                </Panel>
 
-              <section aria-labelledby="districts-heading" className="space-y-3">
-                <div>
-                  <h2 id="districts-heading" className="text-lg font-semibold text-stone-900">
-                    By district
-                  </h2>
-                  <p className="text-sm text-stone-600">
-                    {query.cropId ? 'This crop, every' : 'Every'} district with reports in the window. Choose one to focus on it.
-                  </p>
-                </div>
-                <DataTable
-                  caption="Disease pressure by district"
-                  columns={columns}
-                  rows={s.districts}
-                  rowKey={(d) => d.districtId}
-                  onRowClick={(d) => updateParams({ districtId: d.districtId })}
-                />
-              </section>
+                <Panel aria-labelledby="pathogens-heading" className="xl:col-span-5">
+                  <PanelHeader id="pathogens-heading" title="Pathogens, ranked" description="Share of the pressure in the window, largest first." />
+                  {s.topPathogens.length > 0 ? (
+                    <HBarList
+                      caption="Share of the pressure, by pathogen"
+                      max={100}
+                      items={s.topPathogens.map((p) => ({
+                        key: p.code,
+                        label: p.name,
+                        value: p.sharePercent,
+                        display: `${p.sharePercent}%`,
+                        note: `${p.confirmedCases} confirmed · last ${shortDay(p.lastReportedOn)}`,
+                      }))}
+                    />
+                  ) : (
+                    <p className="text-sm text-stone-600">No pathogen confirmed yet: the reports are waiting for an agronomist.</p>
+                  )}
+                </Panel>
+              </div>
 
-              <details className="text-sm text-stone-600">
-                <summary className="cursor-pointer font-medium text-stone-800">How the index is worked out</summary>
+              <div className="grid items-start gap-4 xl:grid-cols-12">
+                <Panel aria-labelledby="daily-heading" className="xl:col-span-5">
+                  <PanelHeader id="daily-heading" title="Cases per day" description="Confirmed, and reported but not yet confirmed." />
+                  <BarChart
+                    caption={`Cases per day, last ${s.windowDays} days`}
+                    series={[
+                      { key: 'confirmed', label: 'Confirmed', color: 'var(--color-series-1)' },
+                      { key: 'unconfirmed', label: 'Reported, not yet confirmed', color: 'var(--color-series-2)' },
+                    ]}
+                    data={s.daily.map((d) => ({ label: shortDay(d.date), values: [d.confirmedCases, d.reportedCases - d.confirmedCases] }))}
+                  />
+                </Panel>
+
+                <section aria-labelledby="districts-heading" className="space-y-3 xl:col-span-7">
+                  <div>
+                    <h2 id="districts-heading" className="font-display text-xl font-semibold text-stone-900">
+                      By district
+                    </h2>
+                    <p className="text-sm text-stone-600">
+                      {query.cropId ? 'This crop, every' : 'Every'} district with reports in the window. Choose one to focus on it.
+                    </p>
+                  </div>
+                  <DataTable
+                    caption="Disease pressure by district"
+                    columns={columns}
+                    rows={s.districts}
+                    rowKey={(d) => d.districtId}
+                    onRowClick={(d) => updateParams({ districtId: d.districtId })}
+                  />
+                </section>
+              </div>
+
+              <details className="rounded-xl border border-border-subtle bg-surface-card px-4 py-3 text-sm text-stone-700">
+                <summary className="cursor-pointer font-medium text-stone-900">How the index is worked out</summary>
                 <p className="mt-2 max-w-3xl">
                   Each confirmed case counts by severity (low ½, medium 1, high 1½, critical 2) and by age: a case a week old counts
                   half, two weeks old a quarter. The total is mapped onto 0–100, rising steeply for the first few cases and then
@@ -206,6 +249,25 @@ export function IntelligencePage() {
           )
         )}
       </AsyncBoundary>
-    </main>
+    </div>
   )
+}
+
+/**
+ * The sequential ramp for pressure: green through amber to deep red, and larger as it rises, so
+ * the size carries the order even without the colour. Every pin's label names its level in words.
+ */
+const ramp: Record<PressureLevel, { tone: PinTone; size: 'sm' | 'md' | 'lg'; swatch: string }> = {
+  None: { tone: 'success', size: 'sm', swatch: 'size-2.5 bg-success' },
+  Low: { tone: 'success', size: 'sm', swatch: 'size-2.5 bg-success' },
+  Moderate: { tone: 'warning', size: 'md', swatch: 'size-3 bg-warning' },
+  High: { tone: 'danger', size: 'md', swatch: 'size-3.5 bg-danger' },
+  Severe: { tone: 'severe', size: 'lg', swatch: 'size-4 bg-danger-800' },
+}
+
+/** The current filters with one district chosen: a pin keeps the crop and window it was drawn for. */
+function withDistrict(params: URLSearchParams, districtId: string): string {
+  const next = new URLSearchParams(params)
+  next.set('districtId', districtId)
+  return next.toString()
 }

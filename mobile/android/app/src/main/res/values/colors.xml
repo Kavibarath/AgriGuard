@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The warm page colour (surface-page), behind the launch screen and the Flutter UI. -->
+    <color name="agriguard_page">#FDFCF9</color>
+    <!-- Canopy brand-500: the launcher icon's ground, shared with the web and the Flutter seed. -->
+    <color name="ic_launcher_background">#2F855A</color>
+</resources>

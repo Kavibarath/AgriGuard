@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/agri_widgets.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/location/location_service.dart';
 import '../cases/case_widgets.dart';
+import '../cases/gps_card.dart';
 import 'registry_models.dart';
 import 'registry_repository.dart';
 
@@ -104,112 +106,110 @@ class _NewPlotScreenState extends ConsumerState<NewPlotScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Add a plot')),
       body: Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+        child: Column(
           children: [
-            if (_error != null) ...[
-              Notice(message: _error!, icon: Icons.error_outline, tone: NoticeTone.error),
-              const SizedBox(height: 16),
-            ],
-            TextFormField(
-              controller: _code,
-              maxLength: 20,
-              textCapitalization: TextCapitalization.characters,
-              decoration: InputDecoration(labelText: 'Plot code', hintText: 'e.g. P-07', errorText: _serverError('plotCode')),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Give the plot a short code, e.g. P-07' : null,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  if (_error != null) ...[
+                    Notice(message: _error!, tone: NoticeTone.error),
+                    const SizedBox(height: 16),
+                  ],
+                  const SectionTitle('About the plot', icon: Icons.grass),
+                  TextFormField(
+                    controller: _code,
+                    maxLength: 20,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(labelText: 'Plot code', hintText: 'e.g. P-07', errorText: _serverError('plotCode')),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Give the plot a short code, e.g. P-07' : null,
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: _name,
+                    maxLength: 100,
+                    decoration: const InputDecoration(labelText: 'Name (optional)', hintText: 'e.g. Tank field'),
+                  ),
+                  const SizedBox(height: 4),
+                  TextFormField(
+                    controller: _area,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Area (hectares)',
+                      suffixText: 'ha',
+                      helperText: '1 acre is about 0.4 ha',
+                      errorText: _serverError('areaHectares'),
+                    ),
+                    // The same bounds as the API and the database CHECK constraint.
+                    validator: (v) => _decimal(v, min: 0.001, max: 10000, message: 'Enter the area in hectares, more than 0'),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<SoilType>(
+                    initialValue: _soil,
+                    decoration: const InputDecoration(labelText: 'Soil', prefixIcon: Icon(Icons.layers_outlined)),
+                    items: [for (final s in SoilType.values) DropdownMenuItem(value: s, child: Text(s.label))],
+                    onChanged: (s) => setState(() => _soil = s ?? _soil),
+                  ),
+                  const SizedBox(height: 28),
+                  const SectionTitle('Location', icon: Icons.my_location),
+                  Text(
+                    'The weather, the harvest days and the nearest collection centre are all worked out from here.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  GpsCard(
+                    locating: _locating,
+                    fix: _fix,
+                    onRetry: _locate,
+                    message: _fix == null
+                        ? 'Location unavailable. Type the coordinates, or try again.'
+                        : 'From your phone (within ${_fix!.accuracyMetres.round()} m). Stand in the plot for the best result.',
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _latitude,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                          decoration: InputDecoration(labelText: 'Latitude', suffixText: '°', errorText: _serverError('latitude')),
+                          validator: (v) => _decimal(v, min: -90, max: 90, message: 'Between -90 and 90'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _longitude,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                          decoration: InputDecoration(labelText: 'Longitude', suffixText: '°', errorText: _serverError('longitude')),
+                          validator: (v) => _decimal(v, min: -180, max: 180, message: 'Between -180 and 180'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            TextFormField(
-              controller: _name,
-              maxLength: 100,
-              decoration: const InputDecoration(labelText: 'Name (optional)', hintText: 'e.g. Tank field'),
-            ),
-            TextFormField(
-              controller: _area,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(labelText: 'Area (hectares)', helperText: '1 acre is about 0.4 ha', errorText: _serverError('areaHectares')),
-              // The same bounds as the API and the database CHECK constraint.
-              validator: (v) => _decimal(v, min: 0.001, max: 10000, message: 'Enter the area in hectares, more than 0'),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<SoilType>(
-              initialValue: _soil,
-              decoration: const InputDecoration(labelText: 'Soil'),
-              items: [for (final s in SoilType.values) DropdownMenuItem(value: s, child: Text(s.label))],
-              onChanged: (s) => setState(() => _soil = s ?? _soil),
-            ),
-            const SizedBox(height: 20),
-            Text('Location', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            _LocationLine(locating: _locating, fix: _fix, onRetry: _locate),
-            Row(
+            BottomActionBar(
               children: [
                 Expanded(
-                  child: TextFormField(
-                    controller: _latitude,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                    decoration: InputDecoration(labelText: 'Latitude', errorText: _serverError('latitude')),
-                    validator: (v) => _decimal(v, min: -90, max: 90, message: 'Between -90 and 90'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _longitude,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                    decoration: InputDecoration(labelText: 'Longitude', errorText: _serverError('longitude')),
-                    validator: (v) => _decimal(v, min: -180, max: 180, message: 'Between -180 and 180'),
+                  child: FilledButton.icon(
+                    onPressed: _saving ? null : _save,
+                    icon: _saving ? const InlineSpinner() : const Icon(Icons.check),
+                    label: const Text('Add plot'),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.check),
-              label: const Text('Add plot'),
-            ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _LocationLine extends StatelessWidget {
-  const _LocationLine({required this.locating, required this.fix, required this.onRetry});
-
-  final bool locating;
-  final GeoFix? fix;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    if (locating) {
-      return const Row(
-        children: [
-          SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-          SizedBox(width: 8),
-          Text('Finding your location…'),
-        ],
-      );
-    }
-    return Row(
-      children: [
-        Icon(fix == null ? Icons.location_off_outlined : Icons.my_location, size: 18),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(fix == null
-              ? 'Location unavailable. Type the coordinates, or try again.'
-              : 'From your phone (within ${fix!.accuracyMetres.round()} m). Stand in the plot for the best result.'),
-        ),
-        TextButton(onPressed: onRetry, child: Text(fix == null ? 'Try again' : 'Update')),
-      ],
     );
   }
 }

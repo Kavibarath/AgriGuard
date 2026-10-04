@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { Button } from '@/components/ui/button'
 import { DataTable, type Column } from '@/components/ui/DataTable'
@@ -52,7 +53,7 @@ export function FarmDetailPage() {
             <StatusBadge label={stageLabels[plot.activeCycle.stage]} tone={stageTone[plot.activeCycle.stage] ?? 'neutral'} />
           </span>
         ) : (
-          <span className="text-stone-500">—</span>
+          <span className="text-stone-600">—</span>
         ),
     },
     { key: 'status', header: 'Status', render: (plot) => <StatusBadge label={plot.status} tone={plotStatusTone[plot.status]} /> },
@@ -78,25 +79,14 @@ export function FarmDetailPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
-      <nav className="text-sm">
-        <Link to="/farms" className="text-brand-700 hover:underline">
-          ← All farms
-        </Link>
-      </nav>
-
+    <div className="space-y-4 pb-4">
       <AsyncBoundary isPending={farm.isPending} error={farm.error} onRetry={farm.refetch} label="Loading farm">
         {farm.data && (
-          <header className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold text-stone-900">{farm.data.name}</h1>
-              <p className="text-sm text-stone-600">
-                {[farm.data.village, farm.data.districtName].filter(Boolean).join(', ')} · {farm.data.plotCount} plot
-                {farm.data.plotCount === 1 ? '' : 's'} · {farm.data.totalAreaHectares.toFixed(2)} ha
-              </p>
-            </div>
-            {canEdit && <Button onClick={() => setEditingPlot('new')}>Add plot</Button>}
-          </header>
+          <PageHeader
+            title={farm.data.name}
+            description={`${[farm.data.village, farm.data.districtName].filter(Boolean).join(', ')} · ${farm.data.plotCount} plot${farm.data.plotCount === 1 ? '' : 's'} · ${farm.data.totalAreaHectares.toFixed(2)} ha`}
+            actions={canEdit ? <Button onClick={() => setEditingPlot('new')}>Add plot</Button> : undefined}
+          />
         )}
       </AsyncBoundary>
 
@@ -108,9 +98,9 @@ export function FarmDetailPage() {
             action={canEdit ? <Button onClick={() => setEditingPlot('new')}>Add plot</Button> : undefined}
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-            <div className="space-y-2">
-              <h2 className="text-sm font-medium uppercase tracking-wide text-stone-500">Plots</h2>
+          <div className="grid items-start gap-4 xl:grid-cols-12">
+            <div className="space-y-2 xl:col-span-7">
+              <h2 className="font-display text-xl font-semibold text-stone-900">Plots</h2>
               <DataTable
                 caption={`Plots on ${farm.data?.name ?? 'this farm'}`}
                 columns={columns}
@@ -118,14 +108,14 @@ export function FarmDetailPage() {
                 rowKey={(plot) => plot.id}
                 onRowClick={(plot) => setSelectedPlotId(plot.id)}
               />
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-600">
                 Select a plot to see its crop cycle; open its code for spray safety and treatment history.
               </p>
             </div>
 
             {selectedPlot && (
-              <div className="space-y-2">
-                <h2 className="text-sm font-medium uppercase tracking-wide text-stone-500">
+              <div className="space-y-2 xl:sticky xl:top-20 xl:col-span-5">
+                <h2 className="font-display text-xl font-semibold text-stone-900">
                   Crop cycle · {selectedPlot.plotCode}
                 </h2>
                 <CropCyclePanel plot={selectedPlot} canEdit={canEdit} />
@@ -143,6 +133,6 @@ export function FarmDetailPage() {
           plot={editingPlot === 'new' ? undefined : (editingPlot ?? undefined)}
         />
       )}
-    </main>
+    </div>
   )
 }

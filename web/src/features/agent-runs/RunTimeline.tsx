@@ -1,4 +1,8 @@
+import { Panel, PanelHeader } from '@/components/layout/PageHeader'
+import { AlertTriangle, StopOctagon } from '@/components/icons'
 import { cn } from '@/lib/utils'
+import { AgentGlyph } from './agent-identity'
+import { agentIdentity } from './agents'
 import { formatDuration } from './format'
 import type { AgentEventType, AgentRunEvent } from './types'
 
@@ -82,53 +86,73 @@ function detail(event: AgentRunEvent): string {
   }
 }
 
-/** The auditable timeline (§9.6): every status change, tool call, retry and verdict, in order. */
+/**
+ * The auditable timeline (§9.6): every status change, tool call, retry and verdict, in order, as a
+ * ledger — time, agent, what happened, how long it took. Rows that need attention carry an icon
+ * and a spoken "Attention" as well as their tint.
+ */
 export function RunTimeline({ events, loading = false }: { events: AgentRunEvent[]; loading?: boolean }) {
   return (
-    <section aria-labelledby="timeline-heading" className="space-y-3 rounded-lg border border-stone-200 bg-white p-4">
-      <header className="flex items-baseline justify-between gap-2">
-        <h2 id="timeline-heading" className="font-medium text-stone-900">
-          Timeline
-        </h2>
-        <span className="text-xs text-stone-500">Times in UTC</span>
-      </header>
+    <Panel aria-labelledby="timeline-heading">
+      <PanelHeader
+        id="timeline-heading"
+        title="Timeline"
+        description="Every status change, tool call, retry and verdict, oldest first."
+        aside={<span className="text-xs text-stone-600">Times in UTC</span>}
+      />
 
       {loading ? (
         <p className="text-sm text-stone-600">Loading the timeline…</p>
       ) : events.length === 0 ? (
         <p className="text-sm text-stone-600">No events yet.</p>
       ) : (
-        <ol className="space-y-1.5 text-sm">
+        <ol className="divide-y divide-border-subtle text-sm">
           {events.map((event) => {
             const flag = attention[event.eventType]
+            const line = detail(event)
             return (
               <li
                 key={event.id}
                 className={cn(
-                  'grid grid-cols-[4.5rem_1fr] gap-x-2 rounded px-1 py-0.5',
-                  flag === 'warning' && 'bg-amber-50',
-                  flag === 'error' && 'bg-red-50',
+                  'grid grid-cols-[4.25rem_1fr] gap-x-3 px-2 py-2 sm:grid-cols-[4.25rem_8.5rem_1fr_4.5rem]',
+                  flag === 'warning' && 'bg-warning-50',
+                  flag === 'error' && 'bg-danger-50',
                 )}
               >
-                <time dateTime={event.occurredAt} className="tabular-nums text-xs leading-5 text-stone-500">
+                <time dateTime={event.occurredAt} className="text-xs leading-5 text-stone-600 tabular-nums">
                   {event.occurredAt.slice(11, 19)}
                 </time>
-                <div>
-                  <span className={cn('font-medium', flag === 'error' ? 'text-red-800' : flag ? 'text-amber-900' : 'text-stone-900')}>
+                <span className="hidden sm:block">
+                  {event.agentRole && (
+                    <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', agentIdentity[event.agentRole].ink)}>
+                      <AgentGlyph role={event.agentRole} size="sm" />
+                      {event.agentRole}
+                    </span>
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 font-medium',
+                      flag === 'error' ? 'text-danger-800' : flag ? 'text-warning-800' : 'text-stone-900',
+                    )}
+                  >
+                    {flag === 'error' && <StopOctagon size={16} className="shrink-0 text-danger" />}
+                    {flag === 'warning' && <AlertTriangle size={16} className="shrink-0 text-warning" />}
                     {flag && <span className="sr-only">Attention: </span>}
                     {labels[event.eventType]}
                   </span>
-                  {event.agentRole && <span className="text-stone-500"> · {event.agentRole}</span>}
-                  {event.durationMs !== null && (
-                    <span className="text-xs tabular-nums text-stone-500"> · {formatDuration(event.durationMs)}</span>
-                  )}
-                  {detail(event) && <p className="text-xs text-stone-600">{detail(event)}</p>}
+                  {event.agentRole && <span className="text-stone-600 sm:hidden"> · {event.agentRole}</span>}
+                  {line && <p className="text-xs break-words text-stone-600">{line}</p>}
                 </div>
+                <span className="hidden text-right text-xs leading-5 text-stone-600 tabular-nums sm:block">
+                  {event.durationMs !== null ? formatDuration(event.durationMs) : ''}
+                </span>
               </li>
             )
           })}
         </ol>
       )}
-    </section>
+    </Panel>
   )
 }

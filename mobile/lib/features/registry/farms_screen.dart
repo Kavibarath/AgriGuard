@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/agri_widgets.dart';
+import '../../app/motion.dart';
+import '../../app/theme.dart';
 import '../../core/api/api_exception.dart';
 import '../auth/auth_controller.dart';
 import '../auth/auth_models.dart';
@@ -26,11 +29,7 @@ class FarmsScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(isFarmer ? 'My farms & plots' : 'Farms in my district')),
       floatingActionButton: isFarmer
           ? FloatingActionButton.extended(
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                builder: (_) => const _NewFarmSheet(),
-              ),
+              onPressed: () => showModalBottomSheet<void>(context: context, isScrollControlled: true, builder: (_) => const _NewFarmSheet()),
               icon: const Icon(Icons.add),
               label: const Text('Add farm'),
             )
@@ -42,37 +41,98 @@ class FarmsScreen extends ConsumerWidget {
           error: (error, _) => ErrorRetry(error: error, onRetry: () => ref.invalidate(myFarmsProvider)),
           data: (farms) => farms.isEmpty
               ? ListView(
-                  padding: const EdgeInsets.all(24),
                   children: [
-                    Notice(
+                    EmptyState(
+                      earth: true,
+                      title: isFarmer ? 'No farms yet' : 'No farms in your district',
                       message: isFarmer
-                          ? 'No farms yet. Add your farm, then its plots, to report problems and book harvest collection.'
-                          : 'No farms are registered in your district yet.',
+                          ? 'Add your farm, then its plots, to report problems and book harvest collection.'
+                          : 'Farms appear here once farmers in your district register them.',
                     ),
                   ],
                 )
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
-                  itemCount: farms.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  // With more than one farm, the totals lead the list.
+                  itemCount: farms.length + (farms.length > 1 ? 1 : 0),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
-                    final f = farms[i];
-                    return Card(
-                      margin: EdgeInsets.zero,
-                      child: ListTile(
-                        leading: const Icon(Icons.agriculture),
-                        title: Text(f.name),
-                        subtitle: Text([
-                          if (f.village != null && f.village!.isNotEmpty) f.village!,
-                          f.districtName,
-                          '${f.plotCount} plot${f.plotCount == 1 ? '' : 's'} · ${formatHectares(f.totalAreaHectares)}',
-                        ].join(' · ')),
-                        trailing: const Icon(Icons.chevron_right),
+                    if (farms.length > 1 && i == 0) {
+                      final plots = farms.fold<int>(0, (sum, f) => sum + f.plotCount);
+                      final area = farms.fold<double>(0, (sum, f) => sum + f.totalAreaHectares);
+                      return _Totals(farms: farms.length, plots: plots, area: area);
+                    }
+                    final f = farms[farms.length > 1 ? i - 1 : i];
+                    return Reveal(
+                      index: i,
+                      child: AgriCard(
+                        padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
                         onTap: () => context.push('/farms/${f.id}'),
+                        child: Row(
+                          children: [
+                            const GlyphTile(Icons.agriculture_outlined, earth: true),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(f.name, style: Theme.of(context).textTheme.titleSmall),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    [
+                                      if (f.village != null && f.village!.isNotEmpty) f.village!,
+                                      f.districtName,
+                                      '${f.plotCount} plot${f.plotCount == 1 ? '' : 's'} · ${formatHectares(f.totalAreaHectares)}',
+                                    ].join(' · '),
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right, color: AgriColors.inkMuted),
+                          ],
+                        ),
                       ),
                     );
                   },
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The holding at a glance: how many farms and plots, and the land they cover.
+class _Totals extends StatelessWidget {
+  const _Totals({required this.farms, required this.plots, required this.area});
+
+  final int farms;
+  final int plots;
+  final double area;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget figure(String value, String label) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value, style: Theme.of(context).textTheme.headlineSmall),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+    return Semantics(
+      container: true,
+      label: '$farms farm${farms == 1 ? '' : 's'}, $plots plot${plots == 1 ? '' : 's'}, ${formatHectares(area)}',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+        child: Row(
+          children: [
+            figure('$farms', farms == 1 ? 'farm' : 'farms'),
+            figure('$plots', plots == 1 ? 'plot' : 'plots'),
+            figure(formatNumber(double.parse(area.toStringAsFixed(2))), 'hectares'),
+          ],
         ),
       ),
     );
@@ -131,19 +191,18 @@ class _NewFarmSheetState extends ConsumerState<_NewFarmSheet> {
   Widget build(BuildContext context) {
     final districts = ref.watch(districtsProvider);
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
       child: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Add a farm', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            if (_error != null) ...[
-              Notice(message: _error!, icon: Icons.error_outline, tone: NoticeTone.error),
-              const SizedBox(height: 12),
-            ],
+            Text('Add a farm', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text('Then add its plots, standing in each one.', style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 16),
+            if (_error != null) ...[Notice(message: _error!, tone: NoticeTone.error), const SizedBox(height: 12)],
             TextFormField(
               controller: _name,
               maxLength: 150,
@@ -166,12 +225,11 @@ class _NewFarmSheetState extends ConsumerState<_NewFarmSheet> {
                 validator: (id) => id == null ? 'Choose the district' : null,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             FilledButton(
               onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Add farm'),
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+              child: _saving ? const InlineSpinner() : const Text('Add farm'),
             ),
           ],
         ),
@@ -207,40 +265,112 @@ class FarmScreen extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => ErrorRetry(error: error, onRetry: () => ref.invalidate(farmPlotsProvider(farmId))),
           data: (plots) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             children: [
               if (farm.value case final f?)
-                Text(
-                  [if (f.village != null && f.village!.isNotEmpty) f.village!, f.districtName, formatHectares(f.totalAreaHectares)].join(' · '),
-                  style: Theme.of(context).textTheme.bodyMedium,
+                Row(
+                  children: [
+                    const Icon(Icons.place_outlined, size: 20, color: AgriColors.earth600),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        [if (f.village != null && f.village!.isNotEmpty) f.village!, f.districtName, formatHectares(f.totalAreaHectares)].join(' · '),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AgriColors.inkSoft),
+                      ),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+              SectionTitle(
+                'Plots',
+                icon: Icons.grid_view_outlined,
+                trailing: Text('${plots.length}', style: Theme.of(context).textTheme.bodySmall),
+              ),
               if (plots.isEmpty)
-                Notice(message: isFarmer ? 'No plots yet. Add a plot, standing in it if you can, so its location is right.' : 'This farm has no plots yet.'),
-              for (final p in plots) ...[
-                Card(
-                  margin: EdgeInsets.zero,
-                  child: ListTile(
-                    leading: const Icon(Icons.grass),
-                    title: Text(p.title),
-                    subtitle: Text(_cropLine(p)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push('/plots/${p.id}'),
-                  ),
+                EmptyState(
+                  earth: true,
+                  title: 'No plots yet',
+                  message: isFarmer ? 'Add a plot, standing in it if you can, so its location is right.' : null,
                 ),
-                const SizedBox(height: 8),
-              ],
+              for (final p in plots) ...[_PlotCard(plot: p), const SizedBox(height: 10)],
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// One plot: its code and name, what is growing and when it is due, and how far through the
+/// season the crop is.
+class _PlotCard extends StatelessWidget {
+  const _PlotCard({required this.plot});
+
+  final Plot plot;
 
   static String _cropLine(Plot p) {
     final area = formatHectares(p.areaHectares);
     final cycle = p.activeCycle;
     if (cycle == null) return '$area · nothing growing';
     return '$area · ${cycle.cropName}, ${cycle.stage.label} · harvest ${formatDate(cycle.harvestDate)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cycle = plot.activeCycle;
+    return AgriCard(
+      padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
+      onTap: () => context.push('/plots/${plot.id}'),
+      child: Row(
+        children: [
+          GlyphTile(cycle == null ? Icons.crop_square : Icons.grass, earth: cycle == null),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(plot.title, style: theme.textTheme.titleSmall),
+                const SizedBox(height: 2),
+                Text(_cropLine(plot), style: theme.textTheme.bodySmall),
+                if (cycle != null) ...[const SizedBox(height: 10), StageBar(stage: cycle.stage)],
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: AgriColors.inkMuted),
+        ],
+      ),
+    );
+  }
+}
+
+/// The six crop stages as a segmented bar, filled up to the current one. Drawing only: the stage
+/// is always written beside it.
+class StageBar extends StatelessWidget {
+  const StageBar({required this.stage, super.key});
+
+  final CropStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final reached = CropStage.values.indexOf(stage);
+    return ExcludeSemantics(
+      child: Row(
+        children: [
+          for (var i = 0; i < CropStage.values.length; i++) ...[
+            if (i > 0) const SizedBox(width: 3),
+            Expanded(
+              child: Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  color: i < reached ? AgriColors.brand400 : (i == reached ? AgriColors.brand700 : AgriColors.surfaceInset),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }

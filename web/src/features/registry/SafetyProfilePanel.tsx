@@ -6,7 +6,11 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { SelectField } from '@/components/ui/select'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { stageTone } from '@/components/ui/status-tones'
+import { CheckCircle, StopOctagon } from '@/components/icons'
 import { formatDateTime, shortDay } from '@/lib/dates'
+import { cn } from '@/lib/utils'
+import { isoToday } from '@/features/inventory/format'
+import { PhiCalendar } from './PhiCalendar'
 import { useSafetyProfile } from './queries'
 import { isReEntryActive, toDayRanges } from './safety'
 import { sprayBlockLabels, sprayBlockRule, stageLabels, type PlotSafetyProfile, type ProductWindow } from './types'
@@ -28,7 +32,7 @@ export function SafetyProfilePanel({ plotId }: { plotId: string }) {
 
   return (
     <section aria-labelledby="safety-heading" className="space-y-3">
-      <h2 id="safety-heading" className="text-sm font-medium uppercase tracking-wide text-stone-500">
+      <h2 id="safety-heading" className="font-display text-xl font-semibold text-stone-900">
         Spray safety
       </h2>
       <AsyncBoundary isPending={profile.isPending} error={profile.error} onRetry={profile.refetch} label="Loading safety profile">
@@ -75,7 +79,7 @@ function ProfileBody({ profile }: { profile: PlotSafetyProfile }) {
             {w.productName}
             {w.isRestricted && <StatusBadge label="Restricted" tone="warning" />}
           </p>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-600">
             {w.activeIngredientName}
             {w.resistanceGroup && ` · group ${w.resistanceGroup}`}
           </p>
@@ -115,26 +119,26 @@ function ProfileBody({ profile }: { profile: PlotSafetyProfile }) {
 
   return (
     <div className="space-y-4">
-      <dl className="grid grid-cols-2 gap-3 rounded-lg border border-stone-200 bg-white p-4 text-sm sm:grid-cols-4">
+      <dl className="card-raised grid grid-cols-2 gap-3 rounded-xl border border-border-subtle bg-surface-card p-4 text-sm sm:grid-cols-4">
         <div>
-          <dt className="text-stone-500">Crop</dt>
+          <dt className="text-stone-600">Crop</dt>
           <dd className="flex flex-wrap items-center gap-1.5 font-medium text-stone-900">
             {profile.cropName}
             {profile.stage && <StatusBadge label={stageLabels[profile.stage]} tone={stageTone[profile.stage] ?? 'neutral'} />}
           </dd>
         </div>
         <div>
-          <dt className="text-stone-500">Harvest</dt>
+          <dt className="text-stone-600">Harvest</dt>
           <dd className="font-medium text-stone-900">{shortDay(profile.harvestDate)}</dd>
         </div>
         <div>
-          <dt className="text-stone-500">Days to harvest</dt>
+          <dt className="text-stone-600">Days to harvest</dt>
           <dd className="font-medium text-stone-900">
             {profile.daysToHarvest !== null && profile.daysToHarvest < 0 ? `${Math.abs(profile.daysToHarvest)} overdue` : profile.daysToHarvest}
           </dd>
         </div>
         <div>
-          <dt className="text-stone-500">Sprayable today</dt>
+          <dt className="text-stone-600">Sprayable today</dt>
           <dd className="font-medium text-stone-900">
             {sprayable} of {profile.productWindows.length}
           </dd>
@@ -150,26 +154,35 @@ function ProfileBody({ profile }: { profile: PlotSafetyProfile }) {
         <Alert tone="success">No re-entry restriction: the field is safe to work in.</Alert>
       )}
 
-      <div className="rounded-lg border border-stone-200 bg-white p-4">
-        <h3 className="font-medium text-stone-900">Days no product may be sprayed</h3>
+      <div
+        className={cn(
+          'rounded-xl border p-4',
+          blockedRanges.length > 0 ? 'border-danger-200 bg-surface-card shadow-[inset_4px_0_0_var(--color-danger)]' : 'border-border-subtle bg-surface-card',
+        )}
+      >
+        <h3 className="flex items-center gap-1.5 font-semibold text-stone-900">
+          {blockedRanges.length > 0 ? <StopOctagon size={18} className="text-danger" /> : <CheckCircle size={18} className="text-success" />}
+          Days no product may be sprayed
+        </h3>
         {blockedRanges.length === 0 ? (
           <p className="mt-1 text-sm text-stone-600">
             Every day until harvest leaves at least one approved product's pre-harvest interval clear.
           </p>
         ) : (
           <>
-            <p className="mt-1 text-sm text-stone-600">
+            <p className="mt-1 text-sm text-stone-700">
               Spraying on these days would leave less than the shortest pre-harvest interval before picking on{' '}
               {shortDay(profile.harvestDate)}.
             </p>
             <ul className="mt-2 flex flex-wrap gap-2" aria-label="PHI-blocked days">
               {blockedRanges.map((range) => (
-                <li key={range.from} className="rounded-md bg-red-50 px-2 py-1 text-sm text-red-800 ring-1 ring-inset ring-red-200">
+                <li key={range.from} className="rounded-md bg-danger-50 px-2 py-1 text-sm font-medium text-danger-800 ring-1 ring-danger-200 ring-inset">
                   {range.from === range.to ? shortDay(range.from) : `${shortDay(range.from)} – ${shortDay(range.to)}`}
-                  <span className="text-red-600"> · {range.days} day{range.days === 1 ? '' : 's'}</span>
+                  <span className="font-normal"> · {range.days} day{range.days === 1 ? '' : 's'}</span>
                 </li>
               ))}
             </ul>
+            <PhiCalendar blockedDays={profile.phiBlockedSprayDates} harvestDate={profile.harvestDate} today={isoToday()} />
           </>
         )}
       </div>
@@ -196,7 +209,7 @@ function ProfileBody({ profile }: { profile: PlotSafetyProfile }) {
         )}
       </div>
 
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-stone-600">
         From the rules table and this crop's spray record, as of {formatDateTime(profile.generatedAtUtc)}.
       </p>
     </div>
