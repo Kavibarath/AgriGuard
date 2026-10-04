@@ -46,9 +46,11 @@ public sealed class ApiFoundationTests(AgriGuardApiFactory factory)
 
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
         Assert.Equal(4, await db.Districts.CountAsync());
-        Assert.Equal(80, await db.ProductCropApprovals.CountAsync());
+        // Seeded rows have no author; rules the catalogue tests create through the API carry theirs.
+        var seeded = db.ProductCropApprovals.Where(a => a.CreatedBy == null);
+        Assert.Equal(80, await seeded.CountAsync());
         // Carbofuran is withdrawn on every crop (rule V2 / golden case G5).
-        Assert.Equal(3, await db.ProductCropApprovals.CountAsync(a => !a.IsActive));
+        Assert.Equal(3, await seeded.CountAsync(a => !a.IsActive));
     }
 
     [Fact]

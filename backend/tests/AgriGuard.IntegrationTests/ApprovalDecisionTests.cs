@@ -4,8 +4,10 @@ using System.Text.Json;
 using AgriGuard.Domain.Identity;
 using AgriGuard.Domain.Inventory;
 using AgriGuard.Domain.Registry;
+using AgriGuard.Infrastructure.Inventory;
 using AgriGuard.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgriGuard.IntegrationTests;
 
@@ -125,8 +127,9 @@ public sealed class ApprovalDecisionTests(AgriGuardApiFactory factory)
     [Fact]
     public async Task Stock_is_drawn_from_the_batch_closest_to_expiry_first()
     {
-        var run = await factory.RunAwaitingApprovalAsync(stock: 50m);
-        var old = await factory.SeedBatchAsync(run.Dealer.Id, 1.5m, CaseFixtures.Today.AddDays(20));
+        InventoryBatch? old = null;
+        var run = await factory.RunAwaitingApprovalAsync(stock: 50m,
+            beforeProposal: async dealer => old = await factory.SeedBatchAsync(dealer.Id, 1.5m, CaseFixtures.Today.AddDays(20)));
 
         await run.Agronomist.DecideAsync(run.RunId, "Approve", key: Key());
 
@@ -135,16 +138,17 @@ public sealed class ApprovalDecisionTests(AgriGuardApiFactory factory)
             .Where(l => l.Reservation.AgentRunId == run.RunId)
             .Select(l => new { l.BatchId, l.Quantity })
             .ToListAsync());
-        Assert.Equal(1.5m, lines.Single(l => l.BatchId == old.Id).Quantity);
-        Assert.Equal(0.5m, lines.Single(l => l.BatchId != old.Id).Quantity);
+        Assert.Equal(1.5m, lines.Single(l => l.BatchId == old!.Id).Quantity);
+        Assert.Equal(0.5m, lines.Single(l => l.BatchId != old!.Id).Quantity);
         Assert.Equal(49.5m, await factory.OnHandAsync(run.Dealer.Id));
     }
 
     [Fact]
-    public async Task If_the_stock_is_gone_by_approval_time_nothing_is_committed()
+    public async Task If_the_hold_expired_and_the_stock_was_sold_nothing_is_committed()
     {
         var run = await factory.RunAwaitingApprovalAsync(stock: 50m);
-        // Sold over the counter after the agent proposed.
+        // Nobody decided for 24 hours: the sweeper put the stock back on sale, and it sold.
+        await ExpireHoldAsync(run.RunId);
         await factory.QueryAsync(db => db.InventoryBatches.Where(b => b.DealerId == run.Dealer.Id)
             .ExecuteUpdateAsync(s => s.SetProperty(b => b.QuantityOnHand, 1m)));
 
@@ -177,6 +181,9 @@ public sealed class ApprovalDecisionTests(AgriGuardApiFactory factory)
         Assert.Equal("Rejected", result.GetProperty("caseStatus").GetString());
         Assert.Equal(JsonValueKind.Null, result.GetProperty("prescription").ValueKind);
         Assert.Equal(50m, await factory.OnHandAsync(run.Dealer.Id));
+        // The held packs are back on sale.
+        Assert.Equal(0m, await factory.ReservedAsync(run.Dealer.Id));
+        Assert.Equal(ReservationStatus.Released, await HoldStatusAsync(run.RunId));
 
         var detail = await run.Farmer.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{run.RunId}");
         Assert.Contains("bacterial wilt", detail.GetProperty("failureReason").GetString());
@@ -194,6 +201,116 @@ public sealed class ApprovalDecisionTests(AgriGuardApiFactory factory)
         Assert.Equal("RevisionRequested", result.GetProperty("runStatus").GetString());
         Assert.Equal("AgentProcessing", result.GetProperty("caseStatus").GetString());
         Assert.Equal("Use a product with a shorter pre-harvest interval.", factory.Dispatcher.SentFor(run.RunId)!.ReviewerNote);
+    }
+
+    // ── The stock hold under a proposal (§11 step 5) ─────────────────────────
+
+    private Task ExpireHoldAsync(Guid runId) =>
+        factory.QueryAsync(async db =>
+        {
+            await db.StockReservations.Where(r => r.AgentRunId == runId && r.Status == ReservationStatus.Held)
+                .ExecuteUpdateAsync(s => s.SetProperty(r => r.ExpiresAt, DateTime.UtcNow.AddMinutes(-1)));
+            return await factory.Services.GetRequiredService<ReservationExpirySweeper>().SweepAsync(CancellationToken.None);
+        });
+
+    private Task<ReservationStatus> HoldStatusAsync(Guid runId) =>
+        factory.QueryAsync(db => db.StockReservations.Where(r => r.AgentRunId == runId)
+            .OrderBy(r => r.CreatedAt).Select(r => r.Status).FirstAsync());
+
+    private Task<string[]> EventTypesAsync(Guid runId) =>
+        factory.QueryAsync(db => db.AgentRunEvents.Where(e => e.AgentRunId == runId)
+            .OrderBy(e => e.OccurredAt).Select(e => e.EventType.ToString()).ToArrayAsync());
+
+    [Fact]
+    public async Task A_proposal_awaiting_approval_holds_its_packs_for_24_hours()
+    {
+        var run = await factory.RunAwaitingApprovalAsync(stock: 50m);
+
+        var hold = await factory.QueryAsync(db => db.StockReservations.SingleAsync(r => r.AgentRunId == run.RunId));
+
+        Assert.Equal(ReservationStatus.Held, hold.Status);
+        Assert.Equal(run.Dealer.Id, hold.DealerId);
+        // 1.6 kg in 1 kg packs: 2 packs are held, still on the shelf but off sale.
+        Assert.Equal(2m, hold.TotalQuantity);
+        Assert.InRange((hold.ExpiresAt - DateTime.UtcNow).TotalHours, 23.5, 24.1);
+        Assert.Equal(50m, await factory.OnHandAsync(run.Dealer.Id));
+        Assert.Equal(2m, await factory.ReservedAsync(run.Dealer.Id));
+        Assert.Contains("StockHeld", await EventTypesAsync(run.RunId));
+    }
+
+    [Fact]
+    public async Task Approving_commits_the_very_hold_placed_for_the_proposal()
+    {
+        var run = await factory.RunAwaitingApprovalAsync(stock: 50m);
+        var holdId = await factory.QueryAsync(db => db.StockReservations.Where(r => r.AgentRunId == run.RunId).Select(r => r.Id).SingleAsync());
+
+        await run.Agronomist.DecideAsync(run.RunId, "Approve", key: Key());
+
+        var after = await factory.QueryAsync(db => db.StockReservations.Where(r => r.AgentRunId == run.RunId).Select(r => new { r.Id, r.Status }).SingleAsync());
+        Assert.Equal(holdId, after.Id);
+        Assert.Equal(ReservationStatus.Committed, after.Status);
+        Assert.Equal(48m, await factory.OnHandAsync(run.Dealer.Id));
+        Assert.Equal(0m, await factory.ReservedAsync(run.Dealer.Id));
+    }
+
+    [Fact]
+    public async Task The_approval_re_check_counts_the_proposal_s_own_hold_as_available()
+    {
+        // Exactly the 2 packs the proposal needs: all of them are held, none is "available" to
+        // anyone else — but the re-check must not fail V9 against its own hold.
+        var run = await factory.RunAwaitingApprovalAsync(stock: 2m);
+
+        var response = await run.Agronomist.DecideAsync(run.RunId, "Approve", key: Key());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(0m, await factory.OnHandAsync(run.Dealer.Id));
+    }
+
+    [Fact]
+    public async Task Held_stock_cannot_be_sold_to_someone_else_while_the_agronomist_decides()
+    {
+        var run = await factory.RunAwaitingApprovalAsync(stock: 3m);
+        var owner = await factory.QueryAsync(db => db.Users.SingleAsync(u => u.Id == run.Dealer.UserId));
+        var dealer = await factory.SignedInAsAsync(owner);
+
+        var counter = await dealer.HoldAsync(await factory.ProductIdAsync(), 2m);
+        var approve = await run.Agronomist.DecideAsync(run.RunId, "Approve", key: Key());
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, counter.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, approve.StatusCode);
+        Assert.Equal(1m, await factory.OnHandAsync(run.Dealer.Id));
+    }
+
+    [Fact]
+    public async Task Requesting_a_revision_releases_the_hold_and_the_revised_proposal_holds_again()
+    {
+        var run = await factory.RunAwaitingApprovalAsync(stock: 50m);
+
+        await run.Agronomist.DecideAsync(run.RunId, "Revise", "Use a product with a shorter pre-harvest interval.", Key());
+        Assert.Equal(0m, await factory.ReservedAsync(run.Dealer.Id));
+
+        (await factory.ReportProposalAsync(run.RunId, run.Dealer.Id, revisions: 1)).EnsureSuccessStatusCode();
+
+        var holds = await factory.QueryAsync(db => db.StockReservations.Where(r => r.AgentRunId == run.RunId).Select(r => r.Status).ToListAsync());
+        Assert.Equal([ReservationStatus.Held, ReservationStatus.Released], holds.OrderBy(s => s.ToString()));
+        Assert.Equal(2m, await factory.ReservedAsync(run.Dealer.Id));
+        Assert.Contains("StockReleased", await EventTypesAsync(run.RunId));
+    }
+
+    [Fact]
+    public async Task After_the_hold_expires_an_approval_draws_the_stock_afresh()
+    {
+        var run = await factory.RunAwaitingApprovalAsync(stock: 50m);
+        await ExpireHoldAsync(run.RunId);
+        Assert.Equal(0m, await factory.ReservedAsync(run.Dealer.Id));
+
+        var response = await run.Agronomist.DecideAsync(run.RunId, "Approve", key: Key());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var holds = await factory.QueryAsync(db => db.StockReservations.Where(r => r.AgentRunId == run.RunId).Select(r => r.Status).ToListAsync());
+        Assert.Equal([ReservationStatus.Committed, ReservationStatus.Expired], holds.OrderBy(s => s.ToString()));
+        Assert.Equal(48m, await factory.OnHandAsync(run.Dealer.Id));
+        Assert.Contains("StockReleased", await EventTypesAsync(run.RunId));
     }
 
     [Theory]

@@ -6,6 +6,7 @@ Viva-critical piece. Read this with the code open.
 |---|---|
 | `backend/src/AgriGuard.Infrastructure/Cases/ApprovalService.cs` | The decision: approve (the transaction), reject, revise; idempotency and race handling. |
 | `backend/src/AgriGuard.Domain/Inventory/StockAllocation.cs` | Pure FEFO allocation and whole-pack rounding. No database. |
+| `backend/src/AgriGuard.Infrastructure/Inventory/StockLedger.cs` | The row locking and the draw itself, shared with Component C's reservations (see `rules-and-stock.md`). |
 | `backend/src/AgriGuard.Api/Controllers/AgentRunsController.cs` | `POST /api/agent-runs/{id}/decision`: the policy and the `Idempotency-Key` header. |
 | `backend/tests/AgriGuard.IntegrationTests/ApprovalDecisionTests.cs` | One test per promise below, including two approvals racing. |
 | `backend/tests/AgriGuard.UnitTests/Inventory/StockAllocationTests.cs` | FEFO order, spill-over, all-or-nothing, pack rounding. |
@@ -22,14 +23,14 @@ Viva-critical piece. Read this with the code open.
 All seven steps commit together, or none do:
 
 1. **Re-validate** the stored proposal through the same gate and validator the agent used (#21, V1–V11). Time has passed: stock may be gone, another spray may be scheduled, the spray date may now be in the past. If the proposal fails, the answer is **422 `PROPOSAL_NO_LONGER_VALID`**. A proposal from 23 Sept approved on 25 Sept fails V1 exactly like this.
-2. **Lock the batch rows** with `SELECT … FOR UPDATE` (raw SQL, because LINQ has no locking clause), then draw **first-expiry-first-out**: the oldest stock is sold while it is still in date. The farmer buys **whole packs** (0.48 L in 0.25 L packs is 2 packs = 0.5 L), so whole packs are what leave the shelf.
-3. **A `StockReservation`, created already Committed**, records exactly which batches were drawn. Component C's reservation flow will create it earlier, as Held; the audit trail is the same shape.
+2. **Commit the stock held for this proposal.** When the agent's proposal passes the backend's check and the run goes to PendingApproval, its packs are **Held** for 24 hours (`ProposalStockHolds.HoldAsync`, called from `AgentCallbackService`). Approval locks that hold and commits it: exactly those batches lose exactly those packs. If the hold expired before anyone decided, the batch rows are locked with `SELECT … FOR UPDATE` and drawn afresh, **first-expiry-first-out**. Both paths go through `StockLedger`. The farmer buys **whole packs** (0.48 L in 0.25 L packs is 2 packs = 0.5 L), so whole packs are what leave the shelf.
+3. **The `StockReservation` ends Committed** and records exactly which batches the packs left. The re-check in step 1 counts the run's own hold as available (`AgentPrescriptionGate`), so V9 never fails against the proposal's own reservation.
 4. **The `Prescription`** is issued, with `EarliestSafeHarvestDate = SprayDate + PHI` from the rules table. Its instructions are written from the rules table, **never from the model's text**, because this is what the farmer acts on.
 5. **The `InputOrder`** is confirmed with the dealer: packs × pack price.
 6. **A `ChemicalApplication`** is scheduled on the crop's record, so the *next* proposal's V6/V7 count this spray.
 7. The case becomes **Prescribed**, the run **Completed**, and an `ApprovalDecision` plus timeline events are appended.
 
-**Reject** ends the run (case → Rejected; nothing is committed). **Revise** sends the *same run* back to the agent with the reason as `reviewer_note` (case → AgentProcessing), at most twice. After that, reject and prescribe manually.
+**Reject** ends the run (case → Rejected; nothing is committed) and **releases the held stock**. **Revise** releases it too and sends the *same run* back to the agent with the reason as `reviewer_note` (case → AgentProcessing), at most twice; the revised proposal is held again when it arrives. After that, reject and prescribe manually.
 
 ## How "exactly once" is guaranteed (the likely viva question)
 
@@ -39,7 +40,7 @@ Three layers, cheapest first:
 |---|---|
 | The phone retries after a dropped connection (same key) | The key is looked up first and **the stored result is returned** (`Idempotent-Replayed: true`). Nothing runs twice. The key is also re-checked *inside* the transaction, for two same-key requests arriving together. |
 | Someone decides a run that is already decided (new key) | The status check refuses it with 409. |
-| Two agronomists click Approve at the same instant | **Serializable isolation + the run's `xmin` row version + `FOR UPDATE` on the batches.** One transaction commits; the other gets a serialization failure or a stale row version, retries, now sees the run Completed, and answers 409. The unique index "one prescription per run" is the last backstop. |
+| Two agronomists click Approve at the same instant | **Serializable isolation + the run's `xmin` row version + `FOR UPDATE` on the hold and the batches.** One transaction commits; the other gets a serialization failure or a stale row version, retries, now sees the run Completed, and answers 409. The unique index "one prescription per run" is the last backstop. |
 
 `Two_approvals_racing_each_other_commit_exactly_once` fires both requests with `Task.WhenAll` and checks for one 200, one 409, one prescription, and one stock draw.
 
@@ -48,7 +49,7 @@ Three layers, cheapest first:
 - **"Why can't the agent approve?"** It has no tool that reaches this code. `issue_prescription` and `reserve_stock` do not exist in the agent. Only a signed-in Field Agronomist can call this endpoint.
 - **"Why re-validate if the agent already validated?"** The world changed in between. The proposal from 23 Sept shows it: valid when proposed, refused at approval.
 - **"Why serializable and not the default (read committed)?"** Under read committed, two approvals could both read "PendingApproval" and "50 kg in stock" and both commit. Serializable, plus the row locks, makes the second one fail instead.
-- **"What if it crashes halfway?"** Nothing halfway is ever visible: the transaction rolls back and the run stays PendingApproval. `If_the_stock_is_gone_by_approval_time_nothing_is_committed` checks that no decision, prescription or stock change survives a failure.
+- **"What if it crashes halfway?"** Nothing halfway is ever visible: the transaction rolls back and the run stays PendingApproval. `If_the_hold_expired_and_the_stock_was_sold_nothing_is_committed` checks that no decision, prescription or stock change survives a failure.
 - **"Why FEFO?"** Selling the oldest stock first means dealers don't throw away expired chemicals. It is pure and deterministic, so it is unit-tested alone.
 
 ## Live modification drills (practise these)

@@ -70,15 +70,28 @@ public static class CaseFixtures
     /// Mancozeb 2.0 kg/ha over 0.8 ha, spraying tomorrow, from a named dealer so each test draws
     /// only from its own stock. 1.6 kg rounds up to 2 × 1 kg packs.
     /// </summary>
-    public static async Task<AwaitingApproval> RunAwaitingApprovalAsync(this AgriGuardApiFactory factory, decimal stock = 50m)
+    public static async Task<AwaitingApproval> RunAwaitingApprovalAsync(
+        this AgriGuardApiFactory factory,
+        decimal stock = 50m,
+        Func<Dealer, Task>? beforeProposal = null)
     {
         var setup = await factory.SeedTomatoPlotAsync();
         var dealer = await factory.SeedDealerStockAsync(setup.DistrictId, quantity: stock);
+        if (beforeProposal is not null) await beforeProposal(dealer);
         var farmer = await factory.SignedInAsAsync(setup.Farmer);
         var caseId = (await farmer.ReportCaseAsync(setup)).GetProperty("id").GetGuid();
         var runId = await farmer.StartRunAsync(caseId);
 
-        var result = await factory.AgentClient().PostAsJsonAsync($"/internal/agent-runs/{runId}/result", new
+        var result = await factory.ReportProposalAsync(runId, dealer.Id);
+        result.EnsureSuccessStatusCode();
+
+        var agronomist = await factory.CreateUserAsync(UserRole.FieldAgronomist, districtId: setup.DistrictId);
+        return new AwaitingApproval(setup, dealer, farmer, await factory.SignedInAsAsync(agronomist), caseId, runId);
+    }
+
+    /// <summary>The agent reporting the standard Mancozeb proposal as ready for approval.</summary>
+    public static async Task<HttpResponseMessage> ReportProposalAsync(this AgriGuardApiFactory factory, Guid runId, Guid dealerId, int revisions = 0) =>
+        await factory.AgentClient().PostAsJsonAsync($"/internal/agent-runs/{runId}/result", new
         {
             run_id = runId,
             outcome = "PendingApproval",
@@ -88,17 +101,15 @@ public static class CaseFixtures
                 dose_per_hectare = 2.0m,
                 total_quantity = 1.6m,
                 spray_date = Today.AddDays(1).ToString("yyyy-MM-dd"),
-                dealer_id = dealer.Id,
+                dealer_id = dealerId,
                 justification = "Protectant fungicide approved for late blight on tomato."
             },
             diagnosis = new { primary_pathogen_code = "LATE_BLIGHT", candidates = Array.Empty<object>(), reasoning = "Water-soaked lesions." },
-            revisions = 0
+            revisions
         });
-        result.EnsureSuccessStatusCode();
 
-        var agronomist = await factory.CreateUserAsync(UserRole.FieldAgronomist, districtId: setup.DistrictId);
-        return new AwaitingApproval(setup, dealer, farmer, await factory.SignedInAsAsync(agronomist), caseId, runId);
-    }
+    public static Task<decimal> ReservedAsync(this AgriGuardApiFactory factory, Guid dealerId) =>
+        factory.QueryAsync(db => db.InventoryBatches.Where(b => b.DealerId == dealerId).SumAsync(b => b.QuantityReserved));
 
     /// <summary>POST /api/agent-runs/{id}/decision with an Idempotency-Key (or none).</summary>
     public static Task<HttpResponseMessage> DecideAsync(this HttpClient client, Guid runId, string decision, string? reason = null, string? key = null)

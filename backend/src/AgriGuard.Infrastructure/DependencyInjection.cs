@@ -1,11 +1,13 @@
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
 using AgriGuard.Application.Cases;
+using AgriGuard.Application.Inventory;
 using AgriGuard.Application.Registry;
 using AgriGuard.Application.Validation;
 using AgriGuard.Infrastructure.Agent;
 using AgriGuard.Infrastructure.Cases;
 using AgriGuard.Infrastructure.Identity;
+using AgriGuard.Infrastructure.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
 using AgriGuard.Infrastructure.Registry;
@@ -95,6 +97,20 @@ public static class DependencyInjection
         });
 
         services.AddHostedService<AgentRunTimeoutSweeper>();
+
+        // Component C — catalogue, the rules table, dealer stock, holds and orders
+        services.AddScoped<StockLedger>();
+        services.AddScoped<ProposalStockHolds>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IProductCropApprovalService, ProductCropApprovalService>();
+        services.AddScoped<IInventoryService, InventoryService>();
+        services.AddScoped<IReservationService, ReservationService>();
+        services.AddScoped<IOrderService, OrderService>();
+
+        services.AddOptions<InventoryOptions>().Bind(configuration.GetSection(InventoryOptions.SectionName));
+        // Registered as itself too, so tests can run one sweep on demand.
+        services.AddSingleton<ReservationExpirySweeper>();
+        services.AddHostedService(sp => sp.GetRequiredService<ReservationExpirySweeper>());
 
         return services;
     }

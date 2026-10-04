@@ -1,9 +1,11 @@
+using System.Data;
 using System.Text.Json;
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Domain.Cases;
 using AgriGuard.Domain.Validation;
 using AgriGuard.Infrastructure.Cases;
+using AgriGuard.Infrastructure.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -21,6 +23,7 @@ namespace AgriGuard.Infrastructure.Agent;
 public sealed class AgentCallbackService(
     AgriGuardDbContext db,
     AgentPrescriptionGate prescriptionGate,
+    ProposalStockHolds stockHolds,
     TimeProvider timeProvider,
     ILogger<AgentCallbackService> logger) : IAgentCallbackService
 {
@@ -83,6 +86,10 @@ public sealed class AgentCallbackService(
 
         for (var attempt = 1; ; attempt++)
         {
+            // Serializable, because accepting a proposal also holds its stock (StockLedger locks the
+            // batch rows): the run's new status and the hold commit together or not at all.
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
             var run = await db.AgentRuns
                 .Include(r => r.Case)
                 .Include(r => r.Steps)
@@ -122,10 +129,11 @@ public sealed class AgentCallbackService(
             try
             {
                 await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
                 logger.LogInformation("Agent run {RunId} reported {Outcome}; recorded as {Status}", run.Id, outcome, run.Status);
                 return;
             }
-            catch (DbUpdateConcurrencyException) when (attempt < MaxAttempts)
+            catch (Exception ex) when (PostgresErrors.IsRaceLost(ex) && attempt < MaxAttempts)
             {
                 db.ChangeTracker.Clear();
             }
@@ -166,6 +174,14 @@ public sealed class AgentCallbackService(
         {
             logger.LogWarning("Agent run {RunId} reported an approvable proposal that failed the backend check: {Summary}", run.Id, verdict.Summary);
             AgentRunLifecycle.End(run, AgentRunStatus.Failed, $"The backend's check of the proposal did not pass ({verdict.Summary}), although the agent reported it as valid.", now);
+            return;
+        }
+
+        // Hold the stock the proposal needs while the agronomist decides (§11 step 5), so a counter
+        // sale in between cannot leave an approved prescription with nothing to collect.
+        if (await stockHolds.HoldAsync(run, body, now, ct) is { } shortfall)
+        {
+            AgentRunLifecycle.End(run, AgentRunStatus.Failed, shortfall, now);
             return;
         }
 

@@ -1056,6 +1056,10 @@ namespace AgriGuard.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("order_no");
 
+                    b.Property<DateTime?>("PackedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("packed_at");
+
                     b.Property<Guid?>("PrescriptionId")
                         .HasColumnType("uuid")
                         .HasColumnName("prescription_id");
@@ -1584,6 +1588,11 @@ namespace AgriGuard.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("note");
 
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid")

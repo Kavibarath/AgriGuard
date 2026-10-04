@@ -75,6 +75,9 @@ public class StockReservation : AuditableEntity
     public DateTime ExpiresAt { get; set; }
     public DateTime? ResolvedAt { get; set; }
 
+    /// <summary>The dealer's own note on a counter hold ("phone order, Mr Silva").</summary>
+    public string? Note { get; set; }
+
     public uint Version { get; set; }
 
     public ICollection<StockReservationLine> Lines { get; set; } = new List<StockReservationLine>();
@@ -108,6 +111,7 @@ public class InputOrder : AuditableEntity
     public decimal TotalAmount { get; set; }
 
     public DateTime? ConfirmedAt { get; set; }
+    public DateTime? PackedAt { get; set; }
     public DateTime? CollectedAt { get; set; }
 
     public uint Version { get; set; }

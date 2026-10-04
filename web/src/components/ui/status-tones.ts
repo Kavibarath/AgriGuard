@@ -64,6 +64,29 @@ export const ruleStatusTone: Record<string, Tone> = {
   NotEvaluated: 'warning',
 }
 
+/** Dealer stock: in date is unremarkable; the warnings are what the colour is for. */
+export const expiryTone: Record<string, Tone> = {
+  InDate: 'neutral',
+  ExpiringSoon: 'warning',
+  Expired: 'danger',
+}
+
+export const reservationStatusTone: Record<string, Tone> = {
+  Held: 'warning',
+  Committed: 'done',
+  Released: 'neutral',
+  Expired: 'neutral',
+}
+
+/** Orders: waiting on the dealer → waiting on the farmer → done. */
+export const orderStatusTone: Record<string, Tone> = {
+  Draft: 'neutral',
+  Confirmed: 'warning',
+  Packed: 'active',
+  Collected: 'done',
+  Cancelled: 'danger',
+}
+
 export const verdictTone: Record<string, Tone> = {
   Approved: 'done',
   Revise: 'warning',
