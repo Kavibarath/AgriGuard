@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Registry;
@@ -11,9 +12,9 @@ namespace AgriGuard.Infrastructure.Registry;
 public sealed class CropCycleService(
     AgriGuardDbContext db,
     ICurrentUserAccessor currentUser,
-    TimeProvider timeProvider) : ICropCycleService
+    FarmCalendar calendar) : ICropCycleService
 {
-    private DateOnly Today => DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+    private DateOnly Today => calendar.Today;
 
     public async Task<CropCycleDto> GetAsync(Guid id, CancellationToken ct = default)
     {
@@ -106,7 +107,7 @@ public sealed class CropCycleService(
             .Where(t => t.CropCycleId == id)
             .OrderByDescending(t => t.TransitionedAt)
             .FirstOrDefaultAsync(ct);
-        if (lastTransition is not null && reachedOn < DateOnly.FromDateTime(lastTransition.TransitionedAt))
+        if (lastTransition is not null && reachedOn < calendar.DateOf(lastTransition.TransitionedAt))
             throw new RequestValidationException(nameof(request.ReachedOn),
                 $"{cycle.Stage} was recorded on {lastTransition.TransitionedAt:yyyy-MM-dd}; the next stage cannot be earlier.");
 

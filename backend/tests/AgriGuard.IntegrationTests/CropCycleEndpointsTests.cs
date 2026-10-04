@@ -15,7 +15,7 @@ namespace AgriGuard.IntegrationTests;
 [Collection(ApiCollection.Name)]
 public sealed class CropCycleEndpointsTests(AgriGuardApiFactory factory)
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => TestCalendar.Today;
 
     private async Task<(HttpClient Client, User Farmer, Plot Plot, Guid CropId, int MaturityDays)> SetupAsync()
     {

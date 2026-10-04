@@ -4,8 +4,26 @@ import '../../core/api/api_exception.dart';
 import 'case_models.dart';
 
 /// "2026-09-26": unambiguous in every locale the co-op works in, and what the API sends.
-String formatDate(DateTime date) =>
-    '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+///
+/// Timestamps arrive in UTC and are shown on the phone's own calendar: a case reported at 04:45
+/// in Sri Lanka is still the 27th in UTC. Plain dates (spray, harvest) are not shifted.
+String formatDate(DateTime date) {
+  final local = date.toLocal();
+  return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+}
+
+/// "LKR 9,600": whole rupees with thousands separators, as the dealer's receipt prints them.
+String formatLkr(double amount) {
+  final digits = amount.round().abs().toString();
+  final grouped = digits.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+  return 'LKR ${amount < 0 ? '-' : ''}$grouped';
+}
+
+/// "0.6" without trailing zeros: 0.60 L reads as more precise than the rule it came from.
+String formatNumber(double value) {
+  final text = value.toStringAsFixed(3);
+  return text.contains('.') ? text.replaceFirst(RegExp(r'\.?0+$'), '') : text;
+}
 
 /// Status as a chip: the words carry the meaning, the colour only reinforces it.
 class CaseStatusChip extends StatelessWidget {

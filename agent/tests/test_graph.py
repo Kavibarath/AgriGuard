@@ -10,7 +10,7 @@ from app.config import Settings
 from app.contracts import PrescriptionProposal, RunOutcome, RunRequest
 from app.graph import GraphDependencies, build_graph
 from app.runner import execute_run
-from tests.conftest import StubLlm, StubTools, verdict
+from tests.conftest import DEFAULT_TOOL_RESPONSES, StubLlm, StubTools, verdict
 
 
 class RecordingReporter:
@@ -263,6 +263,26 @@ class TestSafeFailure:
 
         assert result.outcome == RunOutcome.FAILED
         assert "No approved product" in result.failure_reason
+
+    async def test_the_action_agent_proposes_from_the_farm_s_date_not_its_own_clock(
+        self, llm: StubLlm, settings: Settings
+    ) -> None:
+        # Before 05:30 in Sri Lanka the UTC date is still yesterday; the backend's date is the one
+        # the validator will judge the spray date against.
+        profile = {**DEFAULT_TOOL_RESPONSES["get_plot_safety_profile"], "today": "2031-01-02"}
+        tools = StubTools({"get_plot_safety_profile": profile})
+
+        await execute_run(
+            RunRequest(run_id="run-1", case_id="case-1", objective="o"),
+            llm,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            settings,
+            RecordingReporter(),  # type: ignore[arg-type]
+            tools.factory(settings),
+        )
+
+        action_prompt = next(user for schema, user in llm.prompts if schema == "PrescriptionProposal")
+        assert "Today: 2031-01-02." in action_prompt
 
 
 class TestTimeline:

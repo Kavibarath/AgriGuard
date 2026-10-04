@@ -78,6 +78,7 @@ describe('AgentRunPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Approve' }))
     const dialog = await screen.findByRole('dialog', { name: /approve and issue/i })
     expect(within(dialog).getByText(/takes the stock off the shelf/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/0\.6 L\/ha, spraying/)).toBeInTheDocument()
 
     // Once decided, the API reports the run completed with its prescription.
     server.use(
@@ -91,6 +92,10 @@ describe('AgentRunPage', () => {
     expect(sent[0].body).toEqual({ decision: 'Approve' })
     expect(sent[0].key).toMatch(/^[0-9a-f-]{36}$/)
     expect(await screen.findByRole('heading', { name: 'Prescription RX-2026-000001 issued' })).toBeInTheDocument()
+    // Doses and amounts carry the product's unit, never a bare number.
+    const rx = screen.getByRole('region', { name: 'Prescription RX-2026-000001 issued' })
+    expect(within(rx).getByText('0.6 L/ha')).toBeInTheDocument()
+    expect(within(rx).getByText('0.48 L')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
   })

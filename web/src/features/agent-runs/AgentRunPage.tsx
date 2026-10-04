@@ -8,6 +8,7 @@ import { useCurrentUser } from '@/features/auth/auth-store'
 import { can } from '@/features/auth/policies'
 import { CasePhotos } from './CasePhotos'
 import { DecisionPanel } from './DecisionPanel'
+import { localDate } from './format'
 import { PrescriptionCard, ProposalCard } from './ProposalCard'
 import { useCase, useRun, useRunEvents } from './queries'
 import { RunSteps } from './RunSteps'
@@ -67,7 +68,7 @@ export function AgentRunPage() {
                 {run.data.status === 'PendingApproval' && (
                   <DecisionPanel run={run.data} canDecide={can(user?.role, 'CanApprovePrescriptions')} />
                 )}
-                {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} />}
+                {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
                 {run.data.verdict && <VerdictCard verdict={run.data.verdict} />}
               </div>
               <div className="space-y-6">
@@ -115,7 +116,7 @@ function CaseContext({ detail }: { detail: CaseDetail }) {
         </div>
         <div>
           <dt className="text-stone-500">Reported</dt>
-          <dd className="font-medium text-stone-900">{detail.createdAt.slice(0, 10)}</dd>
+          <dd className="font-medium text-stone-900">{localDate(detail.createdAt)}</dd>
         </div>
       </dl>
 

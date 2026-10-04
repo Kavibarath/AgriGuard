@@ -1,5 +1,6 @@
 using System.Globalization;
 using AgriGuard.Application.Agent;
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Domain.Registry;
 using AgriGuard.Infrastructure.Persistence;
@@ -17,9 +18,10 @@ public sealed class AgentToolService(
     AgriGuardDbContext db,
     AgentPrescriptionGate prescriptionGate,
     SafetyProfileService safetyProfiles,
-    TimeProvider timeProvider) : IAgentToolService
+    TimeProvider timeProvider,
+    FarmCalendar calendar) : IAgentToolService
 {
-    private DateOnly Today => DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+    private DateOnly Today => calendar.Today;
 
     public async Task<CaseDetailTool> GetCaseDetailAsync(Guid caseId, CancellationToken ct = default)
     {
@@ -183,7 +185,8 @@ public sealed class AgentToolService(
             [.. profile.ProductWindows.Select(w => new ProductWindowTool(
                 w.ProductId, w.ProductName, w.PreHarvestIntervalDays, w.LastSafeSprayDate,
                 w.ApplicationsUsed, w.MaxApplicationsPerCycle, w.LastAppliedOn, w.EarliestNextApplication,
-                w.CanSprayToday, w.BlockedExplanation))]);
+                w.CanSprayToday, w.BlockedExplanation))],
+            Today);
     }
 
     public async Task<StockAvailabilityTool> CheckStockAvailabilityAsync(Guid productId, Guid? districtId, DateOnly? usableOn, CancellationToken ct = default)

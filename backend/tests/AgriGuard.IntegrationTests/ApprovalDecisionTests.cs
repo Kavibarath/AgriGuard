@@ -42,6 +42,8 @@ public sealed class ApprovalDecisionTests(AgriGuardApiFactory factory)
         // 1.6 kg in 1 kg packs is 2 packs, at 2 400 LKR each.
         Assert.Equal(2, rx.GetProperty("packs").GetInt32());
         Assert.Equal(4800m, rx.GetProperty("orderTotal").GetDecimal());
+        // The clients print "2 kg/ha", not a bare "2".
+        Assert.Equal("Kilogram", rx.GetProperty("unit").GetString());
         Assert.Contains("Do not harvest before", rx.GetProperty("instructions").GetString());
 
         // What left the shelf is whole packs, recorded as a committed reservation.
@@ -72,6 +74,7 @@ public sealed class ApprovalDecisionTests(AgriGuardApiFactory factory)
         var after = await run.Agronomist.GetFromJsonAsync<JsonElement>($"/api/agent-runs/{run.RunId}");
 
         Assert.Equal("Mancozeb 80 WP", before.GetProperty("proposedProductName").GetString());
+        Assert.Equal("Kilogram", before.GetProperty("proposedProductUnit").GetString());
         Assert.Equal(JsonValueKind.Null, before.GetProperty("prescription").ValueKind);
         Assert.Matches(@"^RX-\d{4}-\d{6}$", after.GetProperty("prescription").GetProperty("prescriptionNo").GetString());
     }

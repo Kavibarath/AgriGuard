@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using AgriGuard.Application.Agent;
+using AgriGuard.Application.Common;
 using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Validation;
 using AgriGuard.Domain.Cases;
@@ -24,7 +25,7 @@ namespace AgriGuard.Infrastructure.Agent;
 /// Used twice per run: by the validate_prescription tool, and again by the backend when the agent
 /// reports a proposal as ready for approval — the backend never takes the agent's word for it.
 /// </summary>
-public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionValidationService validation, TimeProvider timeProvider)
+public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionValidationService validation, FarmCalendar calendar)
 {
     public async Task<AgentVerdictTool> CheckAsync(AgentProposalInput input, CancellationToken ct = default)
     {
@@ -110,7 +111,7 @@ public sealed class AgentPrescriptionGate(AgriGuardDbContext db, IPrescriptionVa
     /// </summary>
     private async Task<StockInput> LoadStockAsync(Guid runId, Guid productId, Guid? dealerId, Guid districtId, DateOnly sprayDate, CancellationToken ct)
     {
-        var inDateOn = sprayDate == default ? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime) : sprayDate;
+        var inDateOn = sprayDate == default ? calendar.Today : sprayDate;
 
         var batches = db.InventoryBatches.AsNoTracking()
             .Where(b => b.ProductId == productId && b.ExpiryDate > inDateOn);

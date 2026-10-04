@@ -315,11 +315,16 @@ class _PrescriptionSection extends ConsumerWidget {
                     const SizedBox(height: 12),
                     _Line(label: 'Product', value: p.productName),
                     _Line(label: 'Spray on', value: formatDate(p.sprayDate)),
-                    _Line(label: 'Dose', value: '${p.dosePerHectare} per hectare'),
-                    _Line(label: 'Total to spray', value: '${p.totalQuantity}'),
+                    _Line(
+                      label: 'Dose',
+                      value: p.unitSymbol.isEmpty
+                          ? '${formatNumber(p.dosePerHectare)} per hectare'
+                          : '${formatNumber(p.dosePerHectare)} ${p.unitSymbol} per hectare',
+                    ),
+                    _Line(label: 'Total to spray', value: '${formatNumber(p.totalQuantity)} ${p.unitSymbol}'.trim()),
                     const Divider(height: 24),
                     _Line(label: 'Collect from', value: p.dealerName),
-                    _Line(label: 'Order', value: '${p.orderNo} · ${p.packs} pack(s) · LKR ${p.orderTotal.toStringAsFixed(0)}'),
+                    _Line(label: 'Order', value: '${p.orderNo} · ${p.packs} pack(s) · ${formatLkr(p.orderTotal)}'),
                     if (p.instructions != null) ...[
                       const SizedBox(height: 12),
                       Text(p.instructions!),

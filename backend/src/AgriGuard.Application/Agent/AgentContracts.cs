@@ -124,7 +124,10 @@ public sealed record PlotSafetyProfileTool(
     decimal AreaHectares,
     DateOnly HarvestDate,
     int DaysToHarvest,
-    IReadOnlyList<ProductWindowTool> ProductWindows);
+    IReadOnlyList<ProductWindowTool> ProductWindows,
+    // The farm's local date, which "can spray today" was judged on. The agent proposes from this,
+    // not from its own clock, so the proposal and the validator agree on what today is.
+    DateOnly Today);
 
 /// <summary>One product's window, from Component A's safety-profile calculation.</summary>
 public sealed record ProductWindowTool(

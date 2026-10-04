@@ -121,6 +121,8 @@ public sealed class InternalAgentApiTests(AgriGuardApiFactory factory)
             .Single(w => w.GetProperty("productName").GetString() == "Imidacloprid 17.8 SL");
         Assert.Equal(harvest.AddDays(-21), imidacloprid.GetProperty("lastSafeSprayDate").Deserialize<DateOnly>());
         Assert.True(imidacloprid.GetProperty("canSprayToday").GetBoolean());
+        // The agent proposes from the farm's date, not its own clock.
+        Assert.Equal(TestCalendar.Today, profile.GetProperty("today").Deserialize<DateOnly>());
     }
 
     [Fact]

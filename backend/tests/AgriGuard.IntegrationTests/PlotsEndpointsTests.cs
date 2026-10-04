@@ -9,7 +9,7 @@ namespace AgriGuard.IntegrationTests;
 [Collection(ApiCollection.Name)]
 public sealed class PlotsEndpointsTests(AgriGuardApiFactory factory)
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => TestCalendar.Today;
 
     private static object NewPlot(Guid farmId, string code = "P-01", decimal area = 0.8m) => new
     {

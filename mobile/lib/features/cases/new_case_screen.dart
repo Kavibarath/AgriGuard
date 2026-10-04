@@ -219,6 +219,8 @@ class _NewCaseScreenState extends ConsumerState<NewCaseScreen> {
                     Text('How bad is it?', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     SegmentedButton<CaseSeverity>(
+                      // Four segments share a phone's width: without the tick, "Spreading" fits on one line.
+                      showSelectedIcon: false,
                       segments: const [
                         ButtonSegment(value: CaseSeverity.low, label: Text('A little')),
                         ButtonSegment(value: CaseSeverity.medium, label: Text('Spreading')),
