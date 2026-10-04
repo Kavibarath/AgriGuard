@@ -28,6 +28,8 @@ export function makeCaseSummary(overrides: Partial<CaseSummary> = {}): CaseSumma
     updatedAt: '2026-09-25T11:03:56Z',
     latestRunId: RUN_ID,
     latestRunStatus: 'PendingApproval',
+    reportedLatitude: 6.95,
+    reportedLongitude: 80.79,
     ...overrides,
   }
 }
@@ -54,7 +56,25 @@ export function makeCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail 
     farmerNote: INJECTED_NOTE,
     reportedLatitude: 6.95,
     reportedLongitude: 80.79,
+    plotId: 'plot-1',
+    plotLatitude: 6.9497,
+    plotLongitude: 80.7891,
+    capturedAt: null,
+    assignedAgronomistName: null,
+    confirmedPathogenCode: null,
     createdAt: '2026-09-25T11:03:20Z',
+    updatedAt: '2026-09-25T11:03:56Z',
+    agentRuns: [
+      {
+        id: RUN_ID,
+        status: 'PendingApproval',
+        revisionCount: 0,
+        failureReason: null,
+        createdAt: '2026-09-25T11:03:25Z',
+        completedAt: null,
+        farmerAdvice: 'Remove and burn the worst leaves.\nWater at the base, not over the leaves.',
+      },
+    ],
     photos: [],
     ...overrides,
   }
@@ -141,6 +161,17 @@ export function makeRun(overrides: Partial<AgentRun> = {}): AgentRun {
     proposedProductName: 'Azoxystrobin 25 SC',
     proposedProductUnit: 'Litre',
     prescription: null,
+    triage: {
+      route: 'TREAT',
+      reason: 'Late blight is treatable with an approved fungicide.',
+      decided_by: 'coordinator',
+      farmer_advice: ['Remove and burn the worst leaves.', 'Water at the base of the plants, not over the leaves.'],
+    },
+    safetyReview: {
+      decision: 'PASS',
+      explanation: '2 kg/ha is inside the 1.5–2.5 kg/ha range, and harvest is well after the 7-day interval.',
+      fixes: [],
+    },
     ...overrides,
   }
 }

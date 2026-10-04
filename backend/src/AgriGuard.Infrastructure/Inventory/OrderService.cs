@@ -3,6 +3,7 @@ using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Common.Models;
 using AgriGuard.Application.Inventory;
+using AgriGuard.Domain.Identity;
 using AgriGuard.Domain.Inventory;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Registry;
@@ -14,7 +15,8 @@ namespace AgriGuard.Infrastructure.Inventory;
 /// <summary>
 /// The dealer's side of an approved prescription. The approval transaction creates the order
 /// Confirmed, with its stock already drawn; the dealer packs it and hands it over
-/// (<see cref="OrderStatusRules"/>).
+/// (<see cref="OrderStatusRules"/>). Handing over needs the farmer's pickup code
+/// (<see cref="PickupCodes"/>), which only the farmer sees, on the phone (<see cref="ListMineAsync"/>).
 /// </summary>
 public sealed class OrderService(
     AgriGuardDbContext db,
@@ -86,6 +88,18 @@ public sealed class OrderService(
         if (OrderStatusRules.ExplainFulfilment(order.Status, request.Status) is { } refusal)
             throw new BusinessRuleException("ILLEGAL_ORDER_TRANSITION", refusal);
 
+        // The packs go to the farmer the prescription was written for: they show a code only they have.
+        if (request.Status == OrderStatus.Collected && order.PickupCode is { } code)
+        {
+            if (string.IsNullOrWhiteSpace(request.PickupCode))
+                throw new BusinessRuleException("PICKUP_CODE_REQUIRED", "Ask the farmer for the six-digit pickup code on their phone.");
+            if (!PickupCodes.Matches(code, request.PickupCode))
+            {
+                logger.LogWarning("Wrong pickup code for order {OrderNo} at dealer {DealerId}", order.OrderNo, shopId);
+                throw new BusinessRuleException("WRONG_PICKUP_CODE", "That is not this order's pickup code. Check it with the farmer; nothing was handed over.");
+            }
+        }
+
         var from = order.Status;
         var now = timeProvider.GetUtcNow().UtcDateTime;
         order.Status = request.Status;
@@ -107,6 +121,42 @@ public sealed class OrderService(
 
         logger.LogInformation("Order {OrderNo} {From} → {To} by dealer {DealerId}", order.OrderNo, from, request.Status, shopId);
         return await GetAsync(id, ct);
+    }
+
+    public async Task<PagedResult<FarmerOrderDto>> ListMineAsync(PageRequest query, CancellationToken ct = default)
+    {
+        if (currentUser.Role != UserRole.Farmer || currentUser.UserId is not { } farmerId)
+            throw new ForbiddenAccessException("Only a farmer has orders of their own. Dealers see their shop's orders in /api/orders.");
+
+        var page = await db.InputOrders.AsNoTracking()
+            .Where(o => o.FarmerId == farmerId)
+            .OrderByDescending(o => o.CreatedAt).ThenBy(o => o.Id)
+            .Select(o => new FarmerOrderDto(
+                o.Id,
+                o.OrderNo,
+                o.Status,
+                o.Dealer.ShopName,
+                o.Dealer.Address,
+                o.Dealer.Latitude,
+                o.Dealer.Longitude,
+                o.Dealer.User.PhoneNumber,
+                o.Prescription != null ? o.Prescription.PrescriptionNo : null,
+                o.Prescription != null ? (DateOnly?)o.Prescription.SprayDate : null,
+                o.TotalAmount,
+                o.CreatedAt,
+                o.ConfirmedAt,
+                o.PackedAt,
+                o.CollectedAt,
+                o.PickupCode,
+                o.Lines
+                    .Select(l => new OrderLineDto(l.ProductId, l.Product.Name, l.Product.Unit, l.Packs, l.Quantity, l.UnitPrice, l.LineTotal))
+                    .ToList()))
+            .ToPagedResultAsync(query, ct);
+
+        // A used or void code is not worth showing: it can no longer hand anything over.
+        return new PagedResult<FarmerOrderDto>(
+            [.. page.Items.Select(o => o.Status is OrderStatus.Collected or OrderStatus.Cancelled ? o with { PickupCode = null } : o)],
+            page.Page, page.PageSize, page.TotalCount);
     }
 
     private static OrderDto WithNextStep(OrderDto order) => order with { NextStatus = OrderStatusRules.NextFulfilmentStep(order.Status) };

@@ -116,6 +116,7 @@ public sealed class AgentRunService(
         CaseScope.EnsureVisible(row, await db.AgentRuns.AnyAsync(r => r.Id == runId, ct), "Agent run", runId);
 
         var proposal = AgentPayloads.ToElement(row!.ProposalJson);
+        var finalOutcome = AgentPayloads.ToElement(row.FinalOutcomeJson);
         string? productName = null;
         ProductUnit? productUnit = null;
         if (proposal is { ValueKind: JsonValueKind.Object } p
@@ -133,7 +134,7 @@ public sealed class AgentRunService(
             AgentPayloads.ToElement(row.PlanJson),
             proposal,
             AgentPayloads.ToElement(row.VerdictJson),
-            AgentPayloads.ToElement(row.FinalOutcomeJson),
+            finalOutcome,
             row.FailureReason,
             row.RevisionCount,
             row.CreatedAt,
@@ -144,7 +145,9 @@ public sealed class AgentRunService(
                 s.ErrorMessage, s.RetryCount, s.StartedAt, s.CompletedAt, s.DurationMs)).ToList(),
             productName,
             productUnit,
-            row.Status == AgentRunStatus.Completed ? await IssuedPrescriptions.ForRunAsync(db, row.Id, ct) : null);
+            row.Status == AgentRunStatus.Completed ? await IssuedPrescriptions.ForRunAsync(db, row.Id, ct) : null,
+            Nested(finalOutcome, "safety_review"),
+            Nested(finalOutcome, "triage"));
     }
 
     public async Task<PagedResult<AgentRunEventDto>> ListEventsAsync(Guid runId, AgentRunEventQuery query, CancellationToken ct = default)
@@ -166,4 +169,10 @@ public sealed class AgentRunService(
                 e.DurationMs, e.OccurredAt, e.CorrelationId)).ToList(),
             page.Page, page.PageSize, page.TotalCount);
     }
+
+    /// <summary>An object inside the stored result, or null when absent (runs reported before it existed).</summary>
+    private static JsonElement? Nested(JsonElement? outcome, string property) =>
+        outcome is { ValueKind: JsonValueKind.Object } o && o.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object
+            ? value
+            : null;
 }

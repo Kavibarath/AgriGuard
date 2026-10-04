@@ -81,7 +81,8 @@ public sealed class AgentCallbackService(
             "PendingApproval" => ReportedOutcome.PendingApproval,
             "Rejected" => ReportedOutcome.Rejected,
             "Failed" => ReportedOutcome.Failed,
-            _ => throw new RequestValidationException("outcome", "outcome must be PendingApproval, Rejected or Failed.")
+            "ManualReview" => ReportedOutcome.ManualReview,
+            _ => throw new RequestValidationException("outcome", "outcome must be PendingApproval, Rejected, Failed or ManualReview.")
         };
 
         for (var attempt = 1; ; attempt++)
@@ -107,6 +108,7 @@ public sealed class AgentCallbackService(
             run.VerdictJson = AgentPayloads.ToStorable(request.Verdict) ?? run.VerdictJson;
             run.FinalOutcomeJson = AgentPayloads.ToStorable(request);
             run.RevisionCount = Math.Clamp(request.Revisions, 0, 2);
+            run.FarmerAdvice = FarmerAdvice(request.Triage) ?? run.FarmerAdvice;
 
             switch (outcome)
             {
@@ -121,6 +123,13 @@ public sealed class AgentCallbackService(
 
                 case ReportedOutcome.Failed:
                     AgentRunLifecycle.End(run, AgentRunStatus.Failed, request.FailureReason ?? "The agent reported a failure without a reason.", now);
+                    break;
+
+                case ReportedOutcome.ManualReview:
+                    // The Coordinator decided a person should take this case: the run ends, and the
+                    // case goes to the agronomist's queue exactly as after a failure, but it is recorded
+                    // as the deliberate hand-off it is.
+                    AgentRunLifecycle.End(run, AgentRunStatus.Escalated, request.FailureReason ?? "The Coordinator handed the case to an agronomist.", now);
                     break;
             }
 
@@ -201,6 +210,8 @@ public sealed class AgentCallbackService(
             case AgentEventType.StepStarted when e.AgentRole is { } role && e.SequenceNo is { } seq:
                 run.Status = role switch
                 {
+                    // The Coordinator plans first, then comes back after the diagnosis to triage it.
+                    AgentRole.Coordinator when seq > 1 => AgentRunStatus.Triaging,
                     AgentRole.Coordinator => AgentRunStatus.Planning,
                     AgentRole.Diagnosis => AgentRunStatus.Diagnosing,
                     AgentRole.Action => AgentRunStatus.Drafting,
@@ -276,6 +287,24 @@ public sealed class AgentCallbackService(
         return step;
     }
 
+    /// <summary>
+    /// The triage's farmer_advice list as one tip per line, capped to the column. Anything that is
+    /// not a list of strings is ignored rather than stored half-understood.
+    /// </summary>
+    private static string? FarmerAdvice(JsonElement? triage)
+    {
+        if (triage is not { ValueKind: JsonValueKind.Object } t
+            || !t.TryGetProperty("farmer_advice", out var advice) || advice.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var tips = advice.EnumerateArray()
+            .Where(a => a.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(a.GetString()))
+            .Select(a => a.GetString()!.Trim())
+            .Take(6)
+            .ToList();
+        return tips.Count == 0 ? null : Truncate(string.Join("\n", tips), 2000);
+    }
+
     /// <summary>StepStarted carries its detail in top-level fields rather than a payload; keep them on the timeline.</summary>
     private static string? StepPayload(AgentEventRequest e) =>
         e.SequenceNo is null && e.Goal is null
@@ -285,5 +314,5 @@ public sealed class AgentCallbackService(
     private static string? Truncate(string? value, int max) => AgentRunLifecycle.Truncate(value, max);
 
     /// <summary>agent/app/contracts.py RunOutcome.</summary>
-    private enum ReportedOutcome { PendingApproval, Rejected, Failed }
+    private enum ReportedOutcome { PendingApproval, Rejected, Failed, ManualReview }
 }

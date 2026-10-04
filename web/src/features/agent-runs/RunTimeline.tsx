@@ -19,6 +19,8 @@ const labels: Record<AgentEventType, string> = {
   RunCompleted: 'Run finished',
   StockHeld: 'Stock held',
   StockReleased: 'Stock released',
+  SafetyReviewed: 'Safety review',
+  TriageDecided: 'Triage',
 }
 
 /** Events that need the reader's attention are marked, and never by colour alone. */
@@ -64,6 +66,17 @@ function detail(event: AgentRunEvent): string {
         .join(' · ')
     case 'StockReleased':
       return `Back on sale: ${text(p.reason)}`
+    case 'TriageDecided': {
+      const route = p.route === 'TREAT' ? 'Treat with a product' : 'Hand to an agronomist'
+      const by = p.decided_by === 'rules' ? 'a safety rule' : 'the Coordinator'
+      return [`${route}, decided by ${by}: ${text(p.reason)}`, p.overridden === true ? 'the model had said treat' : '']
+        .filter(Boolean)
+        .join(' · ')
+    }
+    case 'SafetyReviewed': {
+      if (p.accepted === true && p.review && typeof p.review === 'object') return text((p.review as { explanation?: unknown }).explanation)
+      return `Set aside: ${text(p.reason)}`
+    }
     default:
       return ''
   }

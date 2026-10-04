@@ -24,3 +24,13 @@ export function addDays(day: string, days: number): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+
+/** "28 Sep 2026", for records that can span seasons. */
+export function fullDay(day: string): string {
+  return parseDay(day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** "27 Sep 2026, 14:05" for audit timestamps, in the viewer's time zone. */
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}

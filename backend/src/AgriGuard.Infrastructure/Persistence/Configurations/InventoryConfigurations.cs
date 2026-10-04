@@ -166,6 +166,7 @@ internal sealed class InputOrderConfiguration : IEntityTypeConfiguration<InputOr
     public void Configure(EntityTypeBuilder<InputOrder> b)
     {
         b.Property(x => x.OrderNo).HasMaxLength(20);
+        b.Property(x => x.PickupCode).HasMaxLength(PickupCodes.Length);
         b.Property(x => x.TotalAmount).HasPrecision(14, 2);
         b.Property(x => x.Version).IsRowVersion();
 

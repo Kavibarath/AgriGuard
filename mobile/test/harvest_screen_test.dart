@@ -1,6 +1,7 @@
 import 'package:agriguard_mobile/app/app.dart';
 import 'package:agriguard_mobile/app/router.dart';
 import 'package:agriguard_mobile/core/api/api_exception.dart';
+import 'package:agriguard_mobile/core/storage/local_store.dart';
 import 'package:agriguard_mobile/core/storage/token_storage.dart';
 import 'package:agriguard_mobile/features/cases/case_models.dart';
 import 'package:agriguard_mobile/features/cases/case_repository.dart';
@@ -98,6 +99,7 @@ void main() {
         overrides: [
           tokenStorageProvider.overrideWithValue(InMemoryTokenStorage(farmerSession())),
           caseRepositoryProvider.overrideWithValue(cases),
+          localStoreProvider.overrideWithValue(InMemoryLocalStore()),
           harvestRepositoryProvider.overrideWithValue(harvest),
         ],
         child: const AgriGuardApp(),

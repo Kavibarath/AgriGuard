@@ -42,5 +42,6 @@ internal static class CaseScope
     /// </summary>
     public static IQueryable<AgentRun> WhereNotTerminal(this IQueryable<AgentRun> runs) => runs.Where(r =>
         r.Status != AgentRunStatus.Completed && r.Status != AgentRunStatus.Rejected
-        && r.Status != AgentRunStatus.Failed && r.Status != AgentRunStatus.TimedOut);
+        && r.Status != AgentRunStatus.Failed && r.Status != AgentRunStatus.TimedOut
+        && r.Status != AgentRunStatus.Escalated);
 }

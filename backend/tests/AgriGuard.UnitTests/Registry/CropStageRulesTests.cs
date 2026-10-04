@@ -131,6 +131,16 @@ public sealed class CropStageRulesTests
         }
 
         [Fact]
+        public void A_stage_recorded_on_the_day_of_sowing_does_not_put_the_harvest_tomorrow()
+        {
+            // Found on the phone: a crop registered today and marked Vegetative at once scaled
+            // the season to zero days. The harvest comes forward at most a quarter of the season.
+            var revised = CropStageRules.ReviseExpectedHarvestDate(Sown, MaturityDays, CropStage.Vegetative, Sown);
+
+            Assert.Equal(Sown.AddDays(75), revised);
+        }
+
+        [Fact]
         public void Caps_a_late_transition_at_twice_the_maturity_period()
         {
             // Vegetative (25%) reached on day 60 of a 100-day crop scales to 240 days; capped at 200.

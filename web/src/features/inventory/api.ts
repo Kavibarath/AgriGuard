@@ -83,8 +83,9 @@ export const releaseReservation = (id: string) => api<Reservation>(`/api/invento
 export const listOrders = (query: OrderQuery) => api<PagedResult<Order>>(`/api/orders${queryString(query)}`)
 
 /** Names the target status, so a repeated click is harmless on the server. */
-export const fulfilOrder = (id: string, status: OrderStatus) =>
-  api<Order>(`/api/orders/${id}/fulfil`, { method: 'POST', json: { status } })
+/** Handing an order over (Collected) needs the six-digit code the farmer shows on their phone. */
+export const fulfilOrder = (id: string, status: OrderStatus, pickupCode?: string) =>
+  api<Order>(`/api/orders/${id}/fulfil`, { method: 'POST', json: pickupCode === undefined ? { status } : { status, pickupCode } })
 
 // ── Regulatory rules ─────────────────────────────────────────────────────────
 

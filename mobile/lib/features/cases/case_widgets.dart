@@ -113,3 +113,46 @@ class Notice extends StatelessWidget {
 }
 
 enum NoticeTone { info, warning, error }
+
+/// The Coordinator agent's general care tips while the farmer waits. Never a product or a dose:
+/// the agent drops any tip that names a pesticide or an amount, and treatment only ever comes as a
+/// prescription an agronomist has approved.
+class AdviceCard extends StatelessWidget {
+  const AdviceCard({required this.tips, super.key});
+
+  final List<String> tips;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('What you can do now', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            for (final tip in tips)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(padding: EdgeInsets.only(top: 2), child: Icon(Icons.check_circle_outline, size: 18)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(tip)),
+                  ],
+                ),
+              ),
+            Text(
+              'General care only. Any treatment comes as a prescription checked by an agronomist.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

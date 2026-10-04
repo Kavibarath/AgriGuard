@@ -24,6 +24,7 @@ interface NavCard {
 // Role-driven navigation: each card is visible only to roles its policy admits.
 const cards: NavCard[] = [
   { policy: 'CanApprovePrescriptions', title: 'Agent runs', description: 'Review proposals, approve or request revision.', to: '/agent-runs' },
+  { policy: 'OwnsFarm', title: 'Crop cases', description: 'Reported problems, on a map, with what the agents did.', to: '/cases' },
   { policy: 'OwnsFarm', title: 'Farms & plots', description: 'Registry, crop cycles and safety profiles.', to: '/farms' },
   { policy: 'OwnsFarm', title: 'Harvests', description: 'Coming harvests and how past forecasts compared.', to: '/harvest' },
   { policy: 'OwnsFarm', title: 'Collection planner', description: 'Slots per centre and day, booked and remaining.', to: '/collection-planner' },

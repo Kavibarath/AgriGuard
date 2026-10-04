@@ -92,5 +92,6 @@ public sealed class FulfilOrderRequestValidator : AbstractValidator<FulfilOrderR
         RuleFor(x => x.Status).IsInEnum()
             .Must(s => s is OrderStatus.Packed or OrderStatus.Collected)
             .WithMessage("An order is fulfilled by marking it Packed, then Collected.");
+        RuleFor(x => x.PickupCode).MaximumLength(20);
     }
 }

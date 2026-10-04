@@ -29,17 +29,26 @@ public sealed class CasesController(ICaseService cases, ICasePhotoService photos
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public Task<CaseDetailDto> Get(Guid id, CancellationToken ct) => cases.GetAsync(id, ct);
 
-    /// <summary>Reports a problem on a plot's current crop. Symptom codes come from the closed catalogue.</summary>
+    /// <summary>
+    /// Reports a problem on a plot's current crop. Symptom codes come from the closed catalogue.
+    /// With a <c>clientReference</c>, sending the same report again (a retry, or the phone's offline
+    /// queue) returns the case already made: 200 with <c>Idempotent-Replayed: true</c>, not a 201.
+    /// </summary>
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.Cases)]
     [ProducesResponseType<CaseDetailDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType<CaseDetailDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CaseDetailDto>> Create(CreateCaseRequest request, CancellationToken ct)
     {
-        var created = await cases.CreateAsync(request, ct);
-        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
+        var (created, isNew) = await cases.CreateAsync(request, ct);
+        if (isNew)
+            return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
+
+        Response.Headers["Idempotent-Replayed"] = "true";
+        return Ok(created);
     }
 
     /// <summary>

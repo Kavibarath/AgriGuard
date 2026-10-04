@@ -57,7 +57,8 @@ public static class CaseStatusRules
     /// <summary>Run statuses after which nothing more will happen to the run.</summary>
     public static readonly IReadOnlySet<AgentRunStatus> TerminalRunStatuses = new HashSet<AgentRunStatus>
     {
-        AgentRunStatus.Completed, AgentRunStatus.Rejected, AgentRunStatus.Failed, AgentRunStatus.TimedOut
+        AgentRunStatus.Completed, AgentRunStatus.Rejected, AgentRunStatus.Failed, AgentRunStatus.TimedOut,
+        AgentRunStatus.Escalated
     };
 
     /// <summary>
@@ -67,7 +68,7 @@ public static class CaseStatusRules
     /// </summary>
     public static readonly IReadOnlySet<AgentRunStatus> AgentActiveRunStatuses = new HashSet<AgentRunStatus>
     {
-        AgentRunStatus.Planning, AgentRunStatus.Diagnosing, AgentRunStatus.Drafting,
+        AgentRunStatus.Planning, AgentRunStatus.Diagnosing, AgentRunStatus.Triaging, AgentRunStatus.Drafting,
         AgentRunStatus.Validating, AgentRunStatus.RevisionRequested
     };
 }

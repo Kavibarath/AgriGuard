@@ -53,6 +53,19 @@ public class CropCase : AuditableEntity
     public decimal ReportedLatitude { get; set; }
     public decimal ReportedLongitude { get; set; }
 
+    /// <summary>
+    /// The phone's own id for this report (a UUID it makes before the first attempt). A report
+    /// queued offline, or retried after a lost response, carries the same id every time, so it is
+    /// stored once. Null for clients that do not send one.
+    /// </summary>
+    public Guid? ClientReference { get; set; }
+
+    /// <summary>
+    /// When the farmer made the report on the phone, if that was before it reached the server
+    /// (the offline queue). Null when it was sent at once; CreatedAt is when it arrived.
+    /// </summary>
+    public DateTime? CapturedAt { get; set; }
+
     /// <summary>Set once an agronomist confirms a diagnosis; feeds the outbreak signal.</summary>
     public Guid? ConfirmedPathogenId { get; set; }
     public Pathogen? ConfirmedPathogen { get; set; }

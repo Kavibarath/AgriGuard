@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     tool_retries: int = 2
     schema_repair_attempts: int = 2
     max_revisions: int = 2
+    # Below this confidence in its primary diagnosis, the Coordinator hands the case to a person.
+    min_diagnosis_confidence: float = 0.5
 
     # Farmer notes are untrusted input; anything longer is truncated before the model sees it.
     max_farmer_note_chars: int = 1000

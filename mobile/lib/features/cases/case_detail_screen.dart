@@ -175,12 +175,20 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
       CaseStatus.submitted || CaseStatus.awaitingManualReview => [
           if (c.status == CaseStatus.awaitingManualReview)
             Notice(
-              message: run?.status == 'Failed' || run?.status == 'TimedOut'
-                  ? 'The AI could not finish this time. An agronomist will look at your case, or you can try again.'
-                  : 'An agronomist is looking at your case.',
+              message: switch (run) {
+                RunSummary(escalated: true) =>
+                  'The AI thinks an agronomist should look at this first. ${run.failureReason ?? ''}'.trim(),
+                RunSummary(status: 'Failed' || 'TimedOut') =>
+                  'The AI could not finish this time. An agronomist will look at your case, or you can try again.',
+                _ => 'An agronomist is looking at your case.',
+              },
               icon: Icons.support_agent,
               tone: NoticeTone.warning,
             ),
+          if (c.status == CaseStatus.awaitingManualReview && run != null && run.advice.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            AdviceCard(tips: run.advice),
+          ],
           if (isFarmer && c.status.canRequestAdvice) ...[
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -203,11 +211,15 @@ class _CaseDetailScreenState extends ConsumerState<CaseDetailScreen> {
             icon: Icons.hourglass_top,
           ),
         ],
-      CaseStatus.pendingApproval => const [
-          Notice(
+      CaseStatus.pendingApproval => [
+          const Notice(
             message: 'A treatment has been proposed and passed the safety checks. An agronomist is reviewing it now.',
             icon: Icons.fact_check_outlined,
           ),
+          if (run != null && run.advice.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            AdviceCard(tips: run.advice),
+          ],
         ],
       CaseStatus.prescribed => [if (run != null) _PrescriptionSection(runId: run.id)],
       CaseStatus.rejected => [

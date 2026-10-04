@@ -97,16 +97,18 @@ public sealed class FarmsEndpointsTests(AgriGuardApiFactory factory)
     {
         var (home, other) = await factory.TwoDistrictsAsync();
         var farmer = await factory.CreateUserAsync(UserRole.Farmer);
-        var inDistrict = await factory.SeedFarmAsync(farmer, home, "In district");
-        var outOfDistrict = await factory.SeedFarmAsync(farmer, other, "Out of district");
+        // Unique names, searched for: the shared test database holds many farms in this district,
+        // so a first page of "all farms" need not include these two.
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var inDistrict = await factory.SeedFarmAsync(farmer, home, $"In district {tag}");
+        var outOfDistrict = await factory.SeedFarmAsync(farmer, other, $"Out of district {tag}");
 
         var agronomist = await factory.CreateUserAsync(UserRole.FieldAgronomist, districtId: home);
         var client = await factory.SignedInAsAsync(agronomist);
 
-        var page = await client.GetFromJsonAsync<JsonElement>("/api/farms?pageSize=100");
+        var page = await client.GetFromJsonAsync<JsonElement>($"/api/farms?pageSize=100&search={tag}");
         var names = page.Items().Select(f => f.GetProperty("name").GetString()).ToList();
-        Assert.Contains("In district", names);
-        Assert.DoesNotContain("Out of district", names);
+        Assert.Equal([$"In district {tag}"], names);
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/farms/{inDistrict.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/api/farms/{outOfDistrict.Id}")).StatusCode);

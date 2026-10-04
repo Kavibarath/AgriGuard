@@ -284,6 +284,8 @@ public sealed class ApprovalService(
             DealerId = dealerId,
             Prescription = prescription,
             Status = OrderStatus.Confirmed,
+            // Only the farmer sees it; the dealer needs it to hand the packs over.
+            PickupCode = PickupCodes.Generate(),
             TotalAmount = packs * packPrice,
             ConfirmedAt = now
         };

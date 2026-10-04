@@ -212,6 +212,55 @@ public sealed class AgentToolService(
     public Task<AgentVerdictTool> ValidatePrescriptionAsync(AgentProposalInput proposal, CancellationToken ct = default) =>
         prescriptionGate.CheckAsync(proposal, ct);
 
+    /// <summary>
+    /// The Coordinator's triage facts: the pathogen's type and how many approved, unrestricted
+    /// products target it on this crop (the same filter as search_approved_products).
+    /// </summary>
+    public async Task<PathogenProfileTool> GetPathogenProfileAsync(string pathogenCode, Guid cropId, CancellationToken ct = default)
+    {
+        var code = pathogenCode.Trim().ToUpperInvariant();
+        var cropName = await db.Crops.AsNoTracking().Where(c => c.Id == cropId).Select(c => c.Name).FirstOrDefaultAsync(ct)
+                       ?? throw new NotFoundException("Crop", cropId);
+        var pathogen = await db.Pathogens.AsNoTracking()
+            .Where(p => p.Code == code)
+            .Select(p => new { p.Code, p.CommonName, p.Type })
+            .FirstOrDefaultAsync(ct);
+        if (pathogen is null)
+            return new PathogenProfileTool(code, code, "Unknown", cropId, cropName, false, 0, false);
+
+        var products = await db.ProductCropApprovals.AsNoTracking()
+            .CountAsync(a => a.CropId == cropId && a.IsActive && !a.IsRestricted && a.Product.IsActive
+                             && a.Product.Targets.Any(t => t.Pathogen.Code == code), ct);
+
+        return new PathogenProfileTool(pathogen.Code, pathogen.CommonName, pathogen.Type.ToString(), cropId, cropName,
+            products > 0, products, true);
+    }
+
+    /// <summary>
+    /// The limits the validator applied, for the Validation agent to quote. Read-only, and only
+    /// explains: the verdict itself comes from validate_prescription.
+    /// </summary>
+    public async Task<RuleLimitsTool> GetRuleLimitsAsync(Guid productId, Guid cropId, CancellationToken ct = default)
+    {
+        var product = await db.Products.AsNoTracking()
+            .Where(p => p.Id == productId)
+            .Select(p => new { p.Name, ActiveIngredient = p.ActiveIngredient.Name, p.Unit, p.PackSize })
+            .FirstOrDefaultAsync(ct)
+            ?? throw new NotFoundException("Product", productId);
+        var cropName = await db.Crops.AsNoTracking().Where(c => c.Id == cropId).Select(c => c.Name).FirstOrDefaultAsync(ct)
+                       ?? throw new NotFoundException("Crop", cropId);
+
+        var rule = await db.ProductCropApprovals.AsNoTracking()
+            .Where(a => a.ProductId == productId && a.CropId == cropId)
+            .FirstOrDefaultAsync(ct);
+
+        return new RuleLimitsTool(
+            productId, product.Name, product.ActiveIngredient, product.Unit.ToString(), product.PackSize, cropId, cropName,
+            rule is not null, rule?.IsActive, rule?.IsRestricted, rule?.MinDosePerHectare, rule?.MaxDosePerHectare,
+            rule?.PreHarvestIntervalDays, rule?.ReEntryIntervalHours, rule?.MaxApplicationsPerCycle,
+            rule?.MinDaysBetweenApplications, rule?.RainfastHours);
+    }
+
     private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string Num(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -9,7 +10,19 @@ import pytest
 from pydantic import BaseModel
 
 from app.config import Settings
-from app.contracts import AgentRole, Diagnosis, PathogenCandidate, Plan, PlanStep, PrescriptionProposal
+from app.contracts import (
+    AgentRole,
+    Diagnosis,
+    PathogenCandidate,
+    Plan,
+    PlanStep,
+    PrescriptionProposal,
+    ReviewDecision,
+    RuleFix,
+    SafetyReview,
+    Triage,
+    TriageRoute,
+)
 from app.llm import LlmError
 from app.tools import ToolClient
 
@@ -138,6 +151,28 @@ DEFAULT_TOOL_RESPONSES: dict[str, Any] = {
         "recentHumidityPercent": 88,
         "days": [{"date": "2026-09-29", "suitable": True}, {"date": "2026-09-30", "suitable": False}],
     },
+    "get_pathogen_profile": {
+        "code": "LATE_BLIGHT",
+        "commonName": "Late blight",
+        "type": "FungalDisease",
+        "cropName": "Tomato",
+        "chemicalControl": True,
+        "approvedProducts": 4,
+        "known": True,
+    },
+    "get_rule_limits": {
+        "productName": "Mancozeb 80 WP",
+        "cropName": "Tomato",
+        "unit": "Kilogram",
+        "approved": True,
+        "isRestricted": False,
+        "minDosePerHectare": 1.5,
+        "maxDosePerHectare": 2.5,
+        "preHarvestIntervalDays": 7,
+        "maxApplicationsPerCycle": 4,
+        "minDaysBetweenApplications": 7,
+        "rainfastHours": 4,
+    },
     "check_stock_availability": {"availableQuantity": 10.0},
     "get_product_pricing": {"unitPrice": 2400.0, "packSize": 1.0},
     "validate_prescription": {
@@ -219,6 +254,51 @@ def proposal() -> PrescriptionProposal:
     )
 
 
+def consistent_review(user: str) -> SafetyReview:
+    """
+    A well-behaved Validation agent: restates the decision it was told and gives one fix per
+    failed rule listed in its prompt.
+    """
+    decision = re.search(r"Your decision must be: (\w+)", user)
+    assert decision is not None, "The review prompt must state the decision"
+    failed = re.findall(r"^- (V\d+) ", user, re.MULTILINE)
+    return SafetyReview(
+        decision=ReviewDecision(decision.group(1)),
+        explanation="The dose and spray date were checked against the rules table.",
+        fixes=[
+            RuleFix(
+                rule_code=code,
+                problem="Outside the rule's limit.",
+                fix="Bring it within the limit.",
+                suggested_value="2.0",
+            )
+            for code in failed
+        ]
+        if decision.group(1) != "PASS"
+        else [],
+    )
+
+
 @pytest.fixture
-def llm(plan: Plan, diagnosis: Diagnosis, proposal: PrescriptionProposal) -> StubLlm:
-    return StubLlm({Plan: plan, Diagnosis: diagnosis, PrescriptionProposal: proposal})
+def triage() -> Triage:
+    return Triage(
+        route=TriageRoute.TREAT,
+        reason="Late blight is treatable with an approved fungicide.",
+        farmer_advice=[
+            "Remove and burn the worst leaves.",
+            "Water at the base of the plants, not over the leaves.",
+        ],
+    )
+
+
+@pytest.fixture
+def llm(plan: Plan, diagnosis: Diagnosis, proposal: PrescriptionProposal, triage: Triage) -> StubLlm:
+    return StubLlm(
+        {
+            Plan: plan,
+            Diagnosis: diagnosis,
+            Triage: triage,
+            PrescriptionProposal: proposal,
+            SafetyReview: consistent_review,
+        }
+    )

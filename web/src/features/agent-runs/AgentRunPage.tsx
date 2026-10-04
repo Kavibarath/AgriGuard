@@ -13,6 +13,7 @@ import { PrescriptionCard, ProposalCard } from './ProposalCard'
 import { useCase, useRun, useRunEvents } from './queries'
 import { RunSteps } from './RunSteps'
 import { RunTimeline } from './RunTimeline'
+import { TriageCard } from './TriageCard'
 import { VerdictCard } from './VerdictCard'
 import { caseStatusLabels, runStatusLabels, workingStatuses, type CaseDetail } from './types'
 
@@ -42,7 +43,12 @@ export function AgentRunPage() {
           <>
             <header className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h1 className="text-2xl font-semibold text-stone-900">Case {run.data.caseReferenceNo}</h1>
+                <h1 className="text-2xl font-semibold text-stone-900">
+                  Case{' '}
+                  <Link to={`/cases/${run.data.caseId}`} className="text-brand-700 hover:underline">
+                    {run.data.caseReferenceNo}
+                  </Link>
+                </h1>
                 <p className="text-sm text-stone-600">{run.data.objective}</p>
               </div>
               <div className="flex items-center gap-3">
@@ -54,6 +60,12 @@ export function AgentRunPage() {
                 <StatusBadge label={runStatusLabels[run.data.status]} tone={runStatusTone[run.data.status]} className="text-sm" />
               </div>
             </header>
+
+            {run.data.status === 'Escalated' && (
+              <Alert tone="warning" title="Handed to an agronomist">
+                {run.data.failureReason} The case is in the manual review queue; no treatment was drafted.
+              </Alert>
+            )}
 
             {ended && run.data.failureReason && (
               <Alert tone={run.data.status === 'Rejected' ? 'warning' : 'error'} title={`Run ${runStatusLabels[run.data.status].toLowerCase()}`}>
@@ -68,8 +80,9 @@ export function AgentRunPage() {
                 {run.data.status === 'PendingApproval' && (
                   <DecisionPanel run={run.data} canDecide={can(user?.role, 'CanApprovePrescriptions')} />
                 )}
+                {run.data.triage && <TriageCard triage={run.data.triage} />}
                 {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
-                {run.data.verdict && <VerdictCard verdict={run.data.verdict} />}
+                {run.data.verdict && <VerdictCard verdict={run.data.verdict} review={run.data.safetyReview} />}
               </div>
               <div className="space-y-6">
                 <RunSteps run={run.data} />

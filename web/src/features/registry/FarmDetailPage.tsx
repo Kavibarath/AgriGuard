@@ -25,7 +25,20 @@ export function FarmDetailPage() {
   const selectedPlot = plots.data?.items.find((plot) => plot.id === selectedPlotId) ?? plots.data?.items[0] ?? null
 
   const columns: Column<Plot>[] = [
-    { key: 'plotCode', header: 'Plot', sortable: true, render: (plot) => <span className="font-medium">{plot.plotCode}</span> },
+    {
+      key: 'plotCode',
+      header: 'Plot',
+      sortable: true,
+      render: (plot) => (
+        <Link
+          to={`/plots/${plot.id}`}
+          className="whitespace-nowrap font-medium text-brand-700 hover:underline"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {plot.plotCode}
+        </Link>
+      ),
+    },
     { key: 'name', header: 'Name', secondary: true, render: (plot) => plot.name ?? '—' },
     { key: 'area', header: 'Area (ha)', numeric: true, sortable: true, render: (plot) => plot.areaHectares.toFixed(3) },
     { key: 'soil', header: 'Soil', secondary: true, render: (plot) => soilLabels[plot.soilType] },
@@ -105,7 +118,9 @@ export function FarmDetailPage() {
                 rowKey={(plot) => plot.id}
                 onRowClick={(plot) => setSelectedPlotId(plot.id)}
               />
-              <p className="text-xs text-stone-500">Select a plot to see its crop cycle.</p>
+              <p className="text-xs text-stone-500">
+                Select a plot to see its crop cycle; open its code for spray safety and treatment history.
+              </p>
             </div>
 
             {selectedPlot && (

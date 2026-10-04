@@ -63,7 +63,10 @@ public sealed class CaseService(
         return ToDetail(row!);
     }
 
-    public async Task<CaseDetailDto> CreateAsync(CreateCaseRequest request, CancellationToken ct = default)
+    /// <summary>A queued report older than this is refused: symptoms a fortnight old would mislead the diagnosis.</summary>
+    public static readonly TimeSpan MaxQueuedReportAge = TimeSpan.FromDays(14);
+
+    public async Task<(CaseDetailDto Case, bool Created)> CreateAsync(CreateCaseRequest request, CancellationToken ct = default)
     {
         var plot = await db.Plots.ScopedTo(currentUser)
             .Include(p => p.Farm)
@@ -74,6 +77,13 @@ public sealed class CaseService(
         // an agronomist advises on cases but does not raise them in someone else's name.
         if (!currentUser.CanWriteFarm(plot!.Farm))
             throw new ForbiddenAccessException("Only the farm's owner or a co-op administrator can report a case on this plot.");
+
+        // A reference this farmer already used means the report was stored and the phone never
+        // heard back. Checked before the crop rules: a report accepted yesterday stays accepted
+        // even if the crop has been harvested since.
+        if (request.ClientReference is { } reference
+            && await FindReplayAsync(plot.Farm.FarmerId, reference, plot.Id, ct) is { } replayed)
+            return (replayed, false);
 
         var cycle = await db.CropCycles.FirstOrDefaultAsync(c => c.Id == request.CropCycleId && c.PlotId == plot.Id, ct)
             ?? throw new RequestValidationException(nameof(request.CropCycleId), "That crop cycle is not on this plot.");
@@ -94,12 +104,69 @@ public sealed class CaseService(
             SymptomCodes = request.SymptomCodes.Select(s => s.Trim().ToLowerInvariant()).Distinct().ToList(),
             FarmerNote = string.IsNullOrWhiteSpace(request.FarmerNote) ? null : request.FarmerNote.Trim(),
             ReportedLatitude = request.Latitude,
-            ReportedLongitude = request.Longitude
+            ReportedLongitude = request.Longitude,
+            ClientReference = request.ClientReference,
+            CapturedAt = CapturedAtFor(request.CapturedAt)
         };
 
         db.CropCases.Add(cropCase);
-        await db.SaveChangesAsync(ct);
-        return await GetAsync(cropCase.Id, ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (request.ClientReference is { } raced && PostgresErrors.IsUniqueViolation(ex, "client_reference"))
+        {
+            // The queued report and its retry arrived together, and the other request stored it.
+            db.ChangeTracker.Clear();
+            return (await FindReplayAsync(plot.Farm.FarmerId, raced, plot.Id, ct)
+                ?? throw new ConflictException("This report was sent twice at once. Open your cases to find it."), false);
+        }
+
+        return (await GetAsync(cropCase.Id, ct), true);
+    }
+
+    /// <summary>
+    /// The case already stored under this farmer's client reference, or null. The same reference
+    /// on a different plot is a client bug (a reused id), not a retry, so it is refused rather
+    /// than silently answered with an unrelated case.
+    /// </summary>
+    private async Task<CaseDetailDto?> FindReplayAsync(Guid farmerId, Guid reference, Guid plotId, CancellationToken ct)
+    {
+        var existing = await db.CropCases.AsNoTracking()
+            .Where(c => c.FarmerId == farmerId && c.ClientReference == reference)
+            .Select(c => new { c.Id, c.PlotId })
+            .FirstOrDefaultAsync(ct);
+
+        if (existing is null)
+            return null;
+        if (existing.PlotId != plotId)
+            throw new BusinessRuleException("CLIENT_REFERENCE_REUSED", "That client reference was already used for a report on another plot. Send a new one.");
+
+        return await GetAsync(existing.Id, ct);
+    }
+
+    /// <summary>
+    /// The phone's capture time, kept only when the report actually waited. A time in the future
+    /// means a wrong phone clock; one older than <see cref="MaxQueuedReportAge"/> is too stale to
+    /// diagnose from. Both are refused, so the farmer is told rather than the data quietly bent.
+    /// </summary>
+    private DateTime? CapturedAtFor(DateTime? capturedAt)
+    {
+        if (capturedAt is not { } value)
+            return null;
+
+        var captured = value.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(value, DateTimeKind.Utc) : value.ToUniversalTime();
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+
+        // A few minutes' allowance for a phone clock that runs fast.
+        if (captured > now.AddMinutes(5))
+            throw new RequestValidationException(nameof(CreateCaseRequest.CapturedAt), "The report's time is in the future. Check the date and time on the phone.");
+        if (now - captured > MaxQueuedReportAge)
+            throw new RequestValidationException(nameof(CreateCaseRequest.CapturedAt),
+                $"This report waited more than {MaxQueuedReportAge.TotalDays:0} days to be sent. Look at the crop again and report what you see now.");
+
+        // Sent within a couple of minutes of being made: an ordinary submission, not a queued one.
+        return now - captured < TimeSpan.FromMinutes(2) ? null : captured;
     }
 
     public async Task<CaseDetailDto> UpdateStatusAsync(Guid id, UpdateCaseStatusRequest request, CancellationToken ct = default)
@@ -162,7 +229,9 @@ public sealed class CaseService(
         c.CreatedAt,
         c.UpdatedAt,
         c.AgentRuns.OrderByDescending(r => r.CreatedAt).Select(r => (Guid?)r.Id).FirstOrDefault(),
-        c.AgentRuns.OrderByDescending(r => r.CreatedAt).Select(r => (AgentRunStatus?)r.Status).FirstOrDefault());
+        c.AgentRuns.OrderByDescending(r => r.CreatedAt).Select(r => (AgentRunStatus?)r.Status).FirstOrDefault(),
+        c.ReportedLatitude,
+        c.ReportedLongitude);
 
     private static readonly Expression<Func<CropCase, CaseRow>> DetailProjection = c => new CaseRow(
         c.Id,
@@ -184,6 +253,9 @@ public sealed class CaseService(
         c.FarmerNote,
         c.ReportedLatitude,
         c.ReportedLongitude,
+        c.Plot.Latitude,
+        c.Plot.Longitude,
+        c.CapturedAt,
         c.AssignedAgronomistId,
         c.AssignedAgronomist != null ? c.AssignedAgronomist.FullName : null,
         c.ConfirmedPathogen != null ? c.ConfirmedPathogen.Code : null,
@@ -191,7 +263,7 @@ public sealed class CaseService(
         c.UpdatedAt,
         c.AgentRuns
             .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new AgentRunSummaryDto(r.Id, r.Status, r.RevisionCount, r.FailureReason, r.CreatedAt, r.CompletedAt))
+            .Select(r => new AgentRunSummaryDto(r.Id, r.Status, r.RevisionCount, r.FailureReason, r.CreatedAt, r.CompletedAt, r.FarmerAdvice))
             .ToList(),
         // Metadata only: the image bytes stay in the database until someone opens the photo.
         c.Attachments
@@ -205,7 +277,7 @@ public sealed class CaseService(
         r.PlotId, r.PlotCode, r.PlotAreaHectares, r.CropCycleId, r.CropId, r.CropName, r.Stage,
         r.DistrictId, r.DistrictName,
         r.SymptomCodes.Select(code => new SymptomDto(code, SymptomCatalogue.All.GetValueOrDefault(code, code))).ToList(),
-        r.FarmerNote, r.ReportedLatitude, r.ReportedLongitude,
+        r.FarmerNote, r.ReportedLatitude, r.ReportedLongitude, r.PlotLatitude, r.PlotLongitude, r.CapturedAt,
         r.AssignedAgronomistId, r.AssignedAgronomistName, r.ConfirmedPathogenCode,
         r.CreatedAt, r.UpdatedAt, r.Runs, r.Photos);
 
@@ -229,6 +301,9 @@ public sealed class CaseService(
         string? FarmerNote,
         decimal ReportedLatitude,
         decimal ReportedLongitude,
+        decimal PlotLatitude,
+        decimal PlotLongitude,
+        DateTime? CapturedAt,
         Guid? AssignedAgronomistId,
         string? AssignedAgronomistName,
         string? ConfirmedPathogenCode,

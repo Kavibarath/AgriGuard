@@ -1,7 +1,7 @@
 import { api } from '@/lib/api'
 import { queryString } from '@/lib/query-string'
 import type { PagedResult } from '@/features/registry/types'
-import type { AgentRun, AgentRunEvent, CaseDetail, CaseStatus, CaseSummary, DecisionResult, DecisionType } from './types'
+import type { AgentRun, AgentRunEvent, CaseDetail, CaseSeverity, CaseStatus, CaseSummary, DecisionResult, DecisionType } from './types'
 
 export interface CaseQuery {
   page?: number
@@ -9,11 +9,17 @@ export interface CaseQuery {
   sortBy?: string
   desc?: boolean
   status?: CaseStatus
+  severity?: CaseSeverity
+  cropId?: string
   search?: string
 }
 
 export const listCases = (query: CaseQuery) => api<PagedResult<CaseSummary>>(`/api/cases${queryString(query)}`)
 export const getCase = (id: string) => api<CaseDetail>(`/api/cases/${id}`)
+
+/** Only Closed and AwaitingManualReview may be set by hand; the API explains any refusal (422). */
+export const updateCaseStatus = (id: string, status: 'Closed' | 'AwaitingManualReview') =>
+  api<CaseDetail>(`/api/cases/${id}/status`, { method: 'PATCH', json: { status } })
 
 /** Through the authenticated client: an <img src> could not carry the bearer token. */
 export const getCasePhoto = (caseId: string, photoId: string) =>

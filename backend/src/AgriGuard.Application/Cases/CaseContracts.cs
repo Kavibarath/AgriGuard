@@ -30,7 +30,10 @@ public sealed record CaseSummaryDto(
     DateTime UpdatedAt,
     // The most recent run, so the queue can show "agent working" / "awaiting approval" at a glance.
     Guid? LatestRunId,
-    AgentRunStatus? LatestRunStatus);
+    AgentRunStatus? LatestRunStatus,
+    // Where the phone was, so the queue can be drawn on a map.
+    decimal ReportedLatitude,
+    decimal ReportedLongitude);
 
 public sealed record CaseDetailDto(
     Guid Id,
@@ -53,6 +56,11 @@ public sealed record CaseDetailDto(
     string? FarmerNote,
     decimal ReportedLatitude,
     decimal ReportedLongitude,
+    // The plot's registered centre, so a report made far from its plot stands out on the map.
+    decimal PlotLatitude,
+    decimal PlotLongitude,
+    // Set when the report waited on the phone (offline queue) before reaching the server.
+    DateTime? CapturedAt,
     Guid? AssignedAgronomistId,
     string? AssignedAgronomistName,
     string? ConfirmedPathogenCode,
@@ -77,7 +85,9 @@ public sealed record AgentRunSummaryDto(
     int RevisionCount,
     string? FailureReason,
     DateTime CreatedAt,
-    DateTime? CompletedAt);
+    DateTime? CompletedAt,
+    // The Coordinator's non-chemical tips for the farmer, one per line; null when it gave none.
+    string? FarmerAdvice);
 
 public sealed record AgentRunDto(
     Guid Id,
@@ -101,7 +111,12 @@ public sealed record AgentRunDto(
     // Litre or Kilogram: the dose is per hectare in this unit, the total quantity in it.
     ProductUnit? ProposedProductUnit,
     // Set once the run was approved.
-    IssuedPrescriptionDto? Prescription);
+    IssuedPrescriptionDto? Prescription,
+    // The Validation agent's plain-language review of the final verdict (agent/app/contracts.py
+    // SafetyReview), when it passed the consistency check. It explains; it never decides.
+    JsonElement? SafetyReview,
+    // The Coordinator's triage (route, reason, decided_by, farmer_advice), once the run has reported.
+    JsonElement? Triage);
 
 public sealed record AgentRunStepDto(
     int SequenceNo,
@@ -140,7 +155,12 @@ public sealed record CreateCaseRequest(
     decimal Latitude,
     decimal Longitude,
     // The farmer's own sense of urgency. Defaults to Medium.
-    CaseSeverity? Severity);
+    CaseSeverity? Severity,
+    // The phone's id for this report. Sending the same one again returns the case already made
+    // (200, Idempotent-Replayed: true) instead of a second case.
+    Guid? ClientReference = null,
+    // When the report was made on the phone, for a report sent later from the offline queue.
+    DateTime? CapturedAt = null);
 
 public sealed record UpdateCaseStatusRequest(CaseStatus Status);
 
@@ -170,7 +190,8 @@ public interface ICaseService
 {
     Task<PagedResult<CaseSummaryDto>> ListAsync(CaseQuery query, CancellationToken ct = default);
     Task<CaseDetailDto> GetAsync(Guid id, CancellationToken ct = default);
-    Task<CaseDetailDto> CreateAsync(CreateCaseRequest request, CancellationToken ct = default);
+    /// <summary>Returns the case and whether it is new; false when the client reference was seen before.</summary>
+    Task<(CaseDetailDto Case, bool Created)> CreateAsync(CreateCaseRequest request, CancellationToken ct = default);
     Task<CaseDetailDto> UpdateStatusAsync(Guid id, UpdateCaseStatusRequest request, CancellationToken ct = default);
 }
 

@@ -6,6 +6,7 @@ import 'package:agriguard_mobile/app/router.dart';
 import 'package:agriguard_mobile/core/api/api_exception.dart';
 import 'package:agriguard_mobile/core/location/location_service.dart';
 import 'package:agriguard_mobile/core/photos/photo_source.dart';
+import 'package:agriguard_mobile/core/storage/local_store.dart';
 import 'package:agriguard_mobile/core/storage/token_storage.dart';
 import 'package:agriguard_mobile/features/cases/case_detail_screen.dart';
 import 'package:agriguard_mobile/features/cases/case_models.dart';
@@ -92,6 +93,7 @@ final prescription = Prescription(
 void main() {
   late MockCaseRepository repository;
   late FakePhotos photos;
+  late InMemoryLocalStore store;
 
   setUpAll(() {
     registerFallbackValue(
@@ -103,6 +105,7 @@ void main() {
   setUp(() {
     repository = MockCaseRepository();
     photos = FakePhotos();
+    store = InMemoryLocalStore();
     when(() => repository.reportablePlots()).thenAnswer((_) async => [plot]);
     when(() => repository.symptoms()).thenAnswer((_) async => symptoms);
     when(() => repository.myCases()).thenAnswer((_) async => []);
@@ -123,6 +126,7 @@ void main() {
           caseRepositoryProvider.overrideWithValue(repository),
           locationServiceProvider.overrideWithValue(FakeLocation(fix)),
           photoSourceProvider.overrideWithValue(photos),
+          localStoreProvider.overrideWithValue(store),
         ],
         child: const AgriGuardApp(),
       ),
@@ -163,7 +167,8 @@ void main() {
       await submit(tester);
 
       final sent = verify(() => repository.reportCase(captureAny())).captured.single as NewCase;
-      expect(sent.toJson(), {
+      final json = sent.toJson();
+      expect(json..remove('clientReference'), {
         'plotId': 'plot-1',
         'cropCycleId': 'cycle-1',
         'symptomCodes': ['leaf_water_soaked_lesions'],
@@ -172,6 +177,8 @@ void main() {
         'longitude': 80.79,
         'farmerNote': 'White fuzz under leaves.',
       });
+      // A fresh reference for the API to recognise a retry by; no capture time, as it went at once.
+      expect(sent.clientReference, matches(RegExp(r'^[0-9a-f-]{36}$')));
       // Straight to the new case, where the farmer can ask for advice.
       expect(find.text('AG-2026-000007'), findsOneWidget);
       expect(find.text('Get AI advice'), findsOneWidget);
@@ -231,7 +238,7 @@ void main() {
       ]);
     });
 
-    testWidgets('keeps the report when a photo fails to send, and says so', (tester) async {
+    testWidgets('keeps a photo the connection cut off, to send later with the case it belongs to', (tester) async {
       when(() => repository.reportCase(any())).thenAnswer((_) async => caseDetail());
       when(() => repository.uploadPhoto(any(), any(), any()))
           .thenThrow(ApiException(message: 'Could not reach AgriGuard.', isNetworkError: true));
@@ -245,7 +252,27 @@ void main() {
       await submit(tester);
 
       expect(find.text('AG-2026-000007'), findsOneWidget);
+      expect(find.textContaining('1 photo will be sent when the connection is back'), findsOneWidget);
+      expect(store.files['outbox.json'] as String, contains('"caseId":"case-1"'));
+      await closeApp(tester);
+    });
+
+    testWidgets('says so when the API refuses a photo, and keeps the report', (tester) async {
+      when(() => repository.reportCase(any())).thenAnswer((_) async => caseDetail());
+      when(() => repository.uploadPhoto(any(), any(), any()))
+          .thenThrow(ApiException(message: 'A case can have at most 3 photos.', statusCode: 422));
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail());
+      photos.queue.add(PickedPhoto(bytes: tinyPng, name: 'leaf.jpg'));
+      await openApp(tester, '/cases/new');
+
+      await tester.tap(find.text('Take photo'));
+      await tester.pumpAndSettle();
+      await fillIn(tester);
+      await submit(tester);
+
+      expect(find.text('AG-2026-000007'), findsOneWidget);
       expect(find.textContaining('1 photo could not be sent'), findsOneWidget);
+      await closeApp(tester);
     });
 
     testWidgets('explains when no plot has a crop growing', (tester) async {
@@ -253,6 +280,103 @@ void main() {
       await openApp(tester, '/cases/new');
 
       expect(find.textContaining('None of your plots has a crop growing'), findsOneWidget);
+    });
+  });
+
+  group('reporting without a signal', () {
+    final offline = ApiException(message: 'Could not reach AgriGuard. Check your connection.', isNetworkError: true);
+
+    Future<void> fillAndSubmit(WidgetTester tester) async {
+      await tester.tap(find.byType(DropdownButtonFormField<ReportablePlot>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('P-01 · Tomato').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Water-soaked patches on leaves'));
+      await tester.ensureVisible(find.text('Report problem'));
+      await tester.tap(find.text('Report problem'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> goTo(WidgetTester tester, String path) async {
+      ProviderScope.containerOf(tester.element(find.byType(AgriGuardApp))).read(routerProvider).push(path);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('keeps the report and its photo on the phone, and lists it as waiting', (tester) async {
+      when(() => repository.reportCase(any())).thenThrow(offline);
+      photos.queue.add(PickedPhoto(bytes: tinyPng, name: 'leaf.jpg'));
+      await openApp(tester, '/cases/new');
+
+      await tester.tap(find.text('Take photo'));
+      await tester.pumpAndSettle();
+      await fillAndSubmit(tester);
+
+      expect(find.textContaining('Your report is saved on this phone'), findsOneWidget);
+      expect(store.files['outbox.json'], isNotNull);
+      expect(store.files.values.whereType<Uint8List>().single, tinyPng);
+
+      await goTo(tester, '/cases');
+      expect(find.text('Saved on this phone, waiting to send (1)'), findsOneWidget);
+      expect(find.text('P-01 · Tomato'), findsOneWidget);
+      expect(find.textContaining('will be sent when online'), findsOneWidget);
+      await closeApp(tester);
+    });
+
+    testWidgets('sends it later with the same reference and the time it was made', (tester) async {
+      var attempts = 0;
+      when(() => repository.reportCase(any())).thenAnswer((_) async {
+        if (attempts++ == 0) throw offline;
+        return caseDetail();
+      });
+      await openApp(tester, '/cases/new');
+      await fillAndSubmit(tester);
+
+      // Opening the list is a moment to try again; this time there is a signal.
+      await goTo(tester, '/cases');
+
+      final sent = verify(() => repository.reportCase(captureAny())).captured.cast<NewCase>();
+      expect(sent, hasLength(2));
+      expect(sent[1].clientReference, sent[0].clientReference);
+      expect(sent[0].capturedAt, isNull);
+      expect(sent[1].capturedAt, isNotNull);
+      expect(find.text('Sent 1 saved report.'), findsOneWidget);
+      expect(find.textContaining('waiting to send'), findsNothing);
+      await closeApp(tester);
+    });
+
+    testWidgets('shows why a saved report was refused, and lets the farmer discard it', (tester) async {
+      var attempts = 0;
+      when(() => repository.reportCase(any())).thenAnswer((_) async {
+        if (attempts++ == 0) throw offline;
+        throw ApiException(message: 'This crop cycle is Harvested. Report problems against the crop currently growing.', statusCode: 422);
+      });
+      await openApp(tester, '/cases/new');
+      await fillAndSubmit(tester);
+      await goTo(tester, '/cases');
+
+      expect(find.textContaining('Not accepted: This crop cycle is Harvested'), findsOneWidget);
+      await tester.tap(find.byTooltip('Discard'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Not accepted'), findsNothing);
+      await closeApp(tester);
+    });
+
+    testWidgets('opens the form from the plots and checklist saved last time', (tester) async {
+      store.files['lookup-plots-${farmer.id}.json'] = jsonEncode([plot.toJson()]);
+      store.files['lookup-symptoms.json'] = jsonEncode([for (final s in symptoms) s.toJson()]);
+      when(() => repository.reportablePlots()).thenThrow(offline);
+      when(() => repository.symptoms()).thenThrow(offline);
+      await openApp(tester, '/cases/new');
+
+      expect(find.byType(DropdownButtonFormField<ReportablePlot>), findsOneWidget);
+      expect(find.text('Water-soaked patches on leaves'), findsOneWidget);
+    });
+
+    testWidgets('still says what is wrong when there is no saved copy either', (tester) async {
+      when(() => repository.reportablePlots()).thenThrow(offline);
+      await openApp(tester, '/cases/new');
+
+      expect(find.textContaining('Could not reach AgriGuard'), findsOneWidget);
     });
   });
 
@@ -375,6 +499,37 @@ void main() {
 
       verify(() => repository.uploadPhoto('case-1', tinyPng, 'leaf2.jpg')).called(1);
       expect(find.bySemanticsLabel(RegExp('Photo 2')), findsOneWidget);
+    });
+
+    testWidgets('explains a case the AI handed to an agronomist, with what to do meanwhile', (tester) async {
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail(
+            status: CaseStatus.awaitingManualReview,
+            runs: [
+              RunSummary.fromJson({
+                'id': 'run-1',
+                'status': 'Escalated',
+                'failureReason': 'No approved product controls Bacterial wilt on Tomato, so nothing can be prescribed.',
+                'farmerAdvice': 'Pull out wilted plants and burn them away from the field.\nDo not replant tomato in this bed this season.',
+              }),
+            ],
+          ));
+      await openApp(tester, '/cases/case-1');
+
+      expect(find.textContaining('The AI thinks an agronomist should look at this first.'), findsOneWidget);
+      expect(find.textContaining('Bacterial wilt'), findsOneWidget);
+      expect(find.text('What you can do now'), findsOneWidget);
+      expect(find.text('Pull out wilted plants and burn them away from the field.'), findsOneWidget);
+      expect(find.text('Do not replant tomato in this bed this season.'), findsOneWidget);
+    });
+
+    testWidgets('shows the care tips while a treatment awaits the agronomist', (tester) async {
+      when(() => repository.getCase('case-1')).thenAnswer((_) async => caseDetail(
+            status: CaseStatus.pendingApproval,
+            runs: [const RunSummary(id: 'run-1', status: 'PendingApproval', advice: ['Remove and burn the worst leaves.'])],
+          ));
+      await openApp(tester, '/cases/case-1');
+
+      expect(find.text('Remove and burn the worst leaves.'), findsOneWidget);
     });
 
     testWidgets('offers to try again when the AI could not finish', (tester) async {

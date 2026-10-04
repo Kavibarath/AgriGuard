@@ -19,19 +19,20 @@ Configuration is environment variables with an `AGENT_` prefix (see `app/config.
 ## The graph
 
 ```
-START → Coordinator → Diagnosis → Action → Validation
-                          ▲          │
-                          └──REVISE──┘   (at most 2)
+START → Coordinator → Diagnosis → Coordinator (triage) ─TREAT─→ Action → Validation
+                                          │                          ▲          │
+                                          │                          └──REVISE──┘   (at most 2)
+                                          └─AGRONOMIST─► handed to a person, with advice for the farmer
 Validation ── REJECT ─► safe failure, recorded
 Validation ── PASS ───► stops; a human decides
 ```
 
 | Agent | Does | May call |
 |---|---|---|
-| Coordinator | Plans the run | `get_case_detail` |
+| Coordinator | Plans the run; after the diagnosis, triages it: treat, or hand to an agronomist with non-chemical advice (hard stops in code win) | `get_case_detail`, `get_pathogen_profile` |
 | Diagnosis | Ranks candidate pathogens with evidence | case, crop history, weather, outbreak signal |
 | Action | Picks an approved product, dose and spray date | products, safety profile, stock, pricing |
-| Validation | Submits the proposal to the deterministic C# validator | `validate_prescription` |
+| Validation | Submits the proposal to the deterministic C# validator (which alone decides the route), then explains the verdict and turns each failure into a concrete fix; a review that contradicts the verdict is discarded | `validate_prescription`, `get_rule_limits` |
 
 ## What makes it *controlled*
 

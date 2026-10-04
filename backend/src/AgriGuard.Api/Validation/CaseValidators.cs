@@ -36,6 +36,9 @@ public sealed class CreateCaseRequestValidator : AbstractValidator<CreateCaseReq
         RuleFor(x => x.Longitude).InclusiveBetween(-180, 180).WithMessage("Longitude must be between -180 and 180.");
 
         RuleFor(x => x.Severity).IsInEnum();
+
+        RuleFor(x => x.ClientReference)
+            .NotEqual(Guid.Empty).WithMessage("Send a fresh UUID as the client reference, or leave it out.");
     }
 }
 

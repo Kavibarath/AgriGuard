@@ -20,6 +20,7 @@ export type CaseSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
 export type AgentRunStatus =
   | 'Planning'
   | 'Diagnosing'
+  | 'Triaging'
   | 'Drafting'
   | 'Validating'
   | 'RevisionRequested'
@@ -30,6 +31,7 @@ export type AgentRunStatus =
   | 'Rejected'
   | 'Failed'
   | 'TimedOut'
+  | 'Escalated'
 
 export type AgentRole = 'Coordinator' | 'Diagnosis' | 'Action' | 'Validation'
 
@@ -38,11 +40,12 @@ export type StepStatus = 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Skipp
 export type DecisionType = 'Approve' | 'Reject' | 'Revise'
 
 /** The agent is still working: the console keeps polling while a run is in one of these. */
-export const workingStatuses: readonly AgentRunStatus[] = ['Planning', 'Diagnosing', 'Drafting', 'Validating', 'RevisionRequested']
+export const workingStatuses: readonly AgentRunStatus[] = ['Planning', 'Diagnosing', 'Triaging', 'Drafting', 'Validating', 'RevisionRequested']
 
 export const runStatusLabels: Record<AgentRunStatus, string> = {
   Planning: 'Planning',
   Diagnosing: 'Diagnosing',
+  Triaging: 'Triaging',
   Drafting: 'Drafting proposal',
   Validating: 'Validating',
   RevisionRequested: 'Revising',
@@ -53,6 +56,7 @@ export const runStatusLabels: Record<AgentRunStatus, string> = {
   Rejected: 'Rejected',
   Failed: 'Failed',
   TimedOut: 'Timed out',
+  Escalated: 'Handed to agronomist',
 }
 
 export const caseStatusLabels: Record<CaseStatus, string> = {
@@ -86,6 +90,9 @@ export interface CaseSummary {
   updatedAt: string
   latestRunId: string | null
   latestRunStatus: AgentRunStatus | null
+  /** Where the phone was: the queue is drawn on a map from these. */
+  reportedLatitude: number
+  reportedLongitude: number
 }
 
 export interface CaseDetail {
@@ -104,8 +111,30 @@ export interface CaseDetail {
   farmerNote: string | null
   reportedLatitude: number
   reportedLongitude: number
+  plotId: string
+  /** The plot's registered centre; a report made far from it stands out on the map. */
+  plotLatitude: number
+  plotLongitude: number
+  /** When the farmer made the report, if it waited on the phone before reaching the server. */
+  capturedAt: string | null
+  assignedAgronomistName: string | null
+  confirmedPathogenCode: string | null
   createdAt: string
+  updatedAt: string
+  agentRuns: CaseRunSummary[]
   photos: CasePhoto[]
+}
+
+/** One of a case's agent runs, newest first. */
+export interface CaseRunSummary {
+  id: string
+  status: AgentRunStatus
+  revisionCount: number
+  failureReason: string | null
+  createdAt: string
+  completedAt: string | null
+  /** The Coordinator's non-chemical tips for the farmer, one per line. */
+  farmerAdvice: string | null
 }
 
 export interface CasePhoto {
@@ -162,6 +191,27 @@ export interface Verdict {
   results: RuleResult[]
 }
 
+/**
+ * The Validation agent's reading of the verdict (agent/app/contracts.py SafetyReview, snake_case).
+ * It explains and suggests; the verdict alone decides.
+ */
+export interface SafetyReview {
+  decision: 'PASS' | 'REVISE' | 'REJECT'
+  explanation: string
+  fixes: { rule_code: string; problem: string; fix: string; suggested_value: string | null }[]
+}
+
+/**
+ * The Coordinator's triage after the diagnosis (agent/app/contracts.py TriageDecision, snake_case):
+ * treat with a product, or hand the case to an agronomist, and who decided.
+ */
+export interface Triage {
+  route: 'TREAT' | 'AGRONOMIST'
+  reason: string
+  decided_by: 'rules' | 'coordinator'
+  farmer_advice: string[]
+}
+
 // ── Runs ─────────────────────────────────────────────────────────────────────
 
 export interface AgentRunStep {
@@ -214,6 +264,8 @@ export interface AgentRun {
   proposedProductName: string | null
   proposedProductUnit: ProductUnit | null
   prescription: IssuedPrescription | null
+  safetyReview: SafetyReview | null
+  triage: Triage | null
 }
 
 export type AgentEventType =
@@ -233,6 +285,8 @@ export type AgentEventType =
   | 'RunCompleted'
   | 'StockHeld'
   | 'StockReleased'
+  | 'SafetyReviewed'
+  | 'TriageDecided'
 
 export interface AgentRunEvent {
   id: string

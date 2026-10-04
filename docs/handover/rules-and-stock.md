@@ -108,6 +108,31 @@ dealer's `/orders` screen moves it to **Packed**, then **Collected** (`POST
 asking for Packed twice is harmless and cannot skip to Collected. `OrderStatusRules` explains every
 refusal (422 `ILLEGAL_ORDER_TRANSITION`).
 
+**The pickup code (hand-over rule).** Every order gets a six-digit code when the approval
+transaction creates it: `PickupCodes.Generate()`, cryptographically random, stored in
+`input_orders.pickup_code` (migration `InputOrderPickupCode`, which also gave open orders a code).
+
+- **Only the farmer sees it**, on the phone's "My orders" screen (`GET /api/orders/mine`). The
+  dealer's own order view never contains it.
+- **The dealer can mark an order Collected only by typing it** in the web "Hand over" dialog.
+  No code gives 422 `PICKUP_CODE_REQUIRED`; a wrong one gives 422 `WRONG_PICKUP_CODE`, logged as a
+  warning, and nothing changes.
+- **Matching** ignores spaces and dashes ("291 947") and compares in constant time.
+- **Once collected**, the phone stops showing the code.
+
+*Why it matters:* the packs were bought with a prescription for a particular farmer and plot. An
+order number is printed on paper and can be read by anyone; the code proves the person at the
+counter is the farmer. (With 1,000,000 possible codes and only the shop's own orders reachable,
+guessing is impractical; a production system would also lock an order after a few wrong tries.)
+
+Live, 29 Sept: the phone showed ORD-2026-000002 as "Ready to collect" with code 291 947. The
+dealer's hand-over was refused without a code and with a wrong one, and accepted with "291 947".
+The phone then showed Collected and no code.
+
+**On the phone** (`mobile/lib/features/orders/`): each order shows Ordered, Packed and Collected
+with dates, the pickup code (large, to read across a counter), the lines and total, and the
+shop's name and address. The screen refreshes itself every 30 s while an order is still open.
+
 ## 5. Who may do what
 
 | Endpoint | Policy | Row scope |
@@ -115,6 +140,7 @@ refusal (422 `ILLEGAL_ORDER_TRANSITION`).
 | `GET /api/products` | any signed-in user | — |
 | product writes, `/api/product-crop-approvals/*` | `AdministersRules` (Co-op Administrator) | — |
 | `/api/inventory/*`, `/api/orders/*` | `ManagesInventory` (Agro-Dealer) | own shop only (`DealerScope`); another shop's row is 403 |
+| `GET /api/orders/mine` | `OwnsFarm`, then farmers only (403 otherwise) | the signed-in farmer's own orders |
 
 ## Live modification drills (practise these)
 
@@ -126,6 +152,8 @@ refusal (422 `ILLEGAL_ORDER_TRANSITION`).
 - **Make holds last 48 hours:** change `ReservationLimits.HoldFor` in `InventoryContracts.cs`.
 - **Warn 60 days ahead instead of 30:** change `BatchExpiry.WarningDays` and `WARNING_DAYS` in
   `InventoryPage.tsx`. `BatchExpiryTests` shows which cases move.
+- **Lock an order after three wrong pickup codes:** count failures on the order (a column and a
+  migration), and refuse with a new code once the limit is reached.
 - **Add a "Ready" step between Packed and Collected:** add the enum value, one entry in
   `OrderStatusRules.NextStep`, a timestamp column (migration), and a label in `types.ts`.
 - **Sell the freshest stock first:** flip `OrderBy(b => b.ExpiryDate)` in

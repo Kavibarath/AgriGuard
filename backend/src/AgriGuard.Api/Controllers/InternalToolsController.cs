@@ -78,6 +78,22 @@ public sealed class InternalToolsController(IAgentToolService tools, ISprayWindo
         CancellationToken ct) =>
         tools.GetProductPricingAsync(productId, quantity, ct);
 
+    /// <summary>get_pathogen_profile — whether a diagnosis can be treated with an approved product (Coordinator only).</summary>
+    [HttpGet("pathogen-profile")]
+    public Task<PathogenProfileTool> PathogenProfile(
+        [FromQuery, BindRequired] string pathogenCode,
+        [FromQuery, BindRequired] Guid cropId,
+        CancellationToken ct) =>
+        tools.GetPathogenProfileAsync(pathogenCode, cropId, ct);
+
+    /// <summary>get_rule_limits — the rules-table row for a product on a crop (Validation agent only).</summary>
+    [HttpGet("rule-limits")]
+    public Task<RuleLimitsTool> RuleLimits(
+        [FromQuery, BindRequired] Guid productId,
+        [FromQuery, BindRequired] Guid cropId,
+        CancellationToken ct) =>
+        tools.GetRuleLimitsAsync(productId, cropId, ct);
+
     /// <summary>
     /// validate_prescription — Component A's deterministic rules V1–V11, the same validator behind
     /// POST /api/prescriptions/validate. A proposal the model got wrong still gets a 200 verdict (V1

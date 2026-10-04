@@ -59,6 +59,11 @@ namespace AgriGuard.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("failure_reason");
 
+                    b.Property<string>("FarmerAdvice")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("farmer_advice");
+
                     b.Property<string>("FinalOutcomeJson")
                         .HasColumnType("jsonb")
                         .HasColumnName("final_outcome_json");
@@ -366,6 +371,14 @@ namespace AgriGuard.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("assigned_agronomist_id");
 
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at");
+
+                    b.Property<Guid?>("ClientReference")
+                        .HasColumnType("uuid")
+                        .HasColumnName("client_reference");
+
                     b.Property<Guid?>("ConfirmedPathogenId")
                         .HasColumnType("uuid")
                         .HasColumnName("confirmed_pathogen_id");
@@ -468,6 +481,11 @@ namespace AgriGuard.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_crop_cases_symptom_codes");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SymptomCodes"), "gin");
+
+                    b.HasIndex("FarmerId", "ClientReference")
+                        .IsUnique()
+                        .HasDatabaseName("ix_crop_cases_farmer_id_client_reference")
+                        .HasFilter("client_reference IS NOT NULL");
 
                     b.HasIndex("DistrictId", "ConfirmedPathogenId", "CreatedAt")
                         .HasDatabaseName("ix_crop_cases_district_id_confirmed_pathogen_id_created_at");
@@ -1061,6 +1079,11 @@ namespace AgriGuard.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("PackedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("packed_at");
+
+                    b.Property<string>("PickupCode")
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)")
+                        .HasColumnName("pickup_code");
 
                     b.Property<Guid?>("PrescriptionId")
                         .HasColumnType("uuid")

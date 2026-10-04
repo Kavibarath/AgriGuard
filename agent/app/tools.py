@@ -27,7 +27,7 @@ log = structlog.get_logger(__name__)
 
 # Which tools each agent may call. Disjoint by design — this table is the control.
 ALLOW_LIST: dict[AgentRole, frozenset[str]] = {
-    AgentRole.COORDINATOR: frozenset({"get_case_detail"}),
+    AgentRole.COORDINATOR: frozenset({"get_case_detail", "get_pathogen_profile"}),
     AgentRole.DIAGNOSIS: frozenset(
         {"get_case_detail", "get_crop_history", "get_weather_forecast", "get_regional_outbreak_signal"}
     ),
@@ -39,7 +39,7 @@ ALLOW_LIST: dict[AgentRole, frozenset[str]] = {
             "get_product_pricing",
         }
     ),
-    AgentRole.VALIDATION: frozenset({"validate_prescription"}),
+    AgentRole.VALIDATION: frozenset({"validate_prescription", "get_rule_limits"}),
 }
 
 # Tool name → (HTTP method, path on the backend).
@@ -53,6 +53,8 @@ TOOL_ROUTES: dict[str, tuple[str, str]] = {
     "check_stock_availability": ("GET", "/internal/tools/stock-availability"),
     "get_product_pricing": ("GET", "/internal/tools/product-pricing"),
     "validate_prescription": ("POST", "/internal/tools/validate-prescription"),
+    "get_rule_limits": ("GET", "/internal/tools/rule-limits"),
+    "get_pathogen_profile": ("GET", "/internal/tools/pathogen-profile"),
 }
 
 

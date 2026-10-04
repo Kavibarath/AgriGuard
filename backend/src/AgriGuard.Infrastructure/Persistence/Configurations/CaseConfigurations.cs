@@ -29,6 +29,13 @@ internal sealed class CropCaseConfiguration : IEntityTypeConfiguration<CropCase>
         b.HasIndex(x => new { x.Status, x.DistrictId, x.CreatedAt }).IsDescending(false, false, true);
         b.HasIndex(x => x.FarmerId);
 
+        // Idempotent reporting: one case per phone-made reference per farmer, even when a queued
+        // report and its retry arrive together. Scoped to the farmer so one account can never
+        // learn about, or collide with, another's reference.
+        b.HasIndex(x => new { x.FarmerId, x.ClientReference })
+            .IsUnique()
+            .HasFilter("client_reference IS NOT NULL");
+
         // Outbreak signal: confirmed pathogen per district over a time window.
         b.HasIndex(x => new { x.DistrictId, x.ConfirmedPathogenId, x.CreatedAt });
 
@@ -63,6 +70,7 @@ internal sealed class AgentRunConfiguration : IEntityTypeConfiguration<AgentRun>
     {
         b.Property(x => x.Objective).HasMaxLength(1000);
         b.Property(x => x.FailureReason).HasMaxLength(1000);
+        b.Property(x => x.FarmerAdvice).HasMaxLength(2000);
         b.Property(x => x.PlanJson).HasColumnType("jsonb");
         b.Property(x => x.ProposalJson).HasColumnType("jsonb");
         b.Property(x => x.VerdictJson).HasColumnType("jsonb");

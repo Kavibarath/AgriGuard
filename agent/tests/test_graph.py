@@ -58,9 +58,11 @@ class TestHappyPath:
 
         assert state["outcome"] == RunOutcome.PENDING_APPROVAL
         # Each agent ran exactly once, in the planned order.
+        # The Coordinator runs twice: to plan, and to triage the diagnosis before any treatment.
         assert [payload["agentRole"] for name, payload in reporter.events if name == "StepStarted"] == [
             "Coordinator",
             "Diagnosis",
+            "Coordinator",
             "Action",
             "Validation",
         ]
@@ -90,8 +92,8 @@ class TestAllowList:
         for role, tool in tools.calls:
             by_role.setdefault(role, set()).add(tool)
 
-        assert by_role["Coordinator"] == {"get_case_detail"}
-        assert by_role["Validation"] == {"validate_prescription"}
+        assert by_role["Coordinator"] == {"get_case_detail", "get_pathogen_profile"}
+        assert by_role["Validation"] == {"validate_prescription", "get_rule_limits"}
         # The headline control: the Diagnosis agent never touches stock or products.
         assert "check_stock_availability" not in by_role.get("Diagnosis", set())
         assert "search_approved_products" not in by_role.get("Diagnosis", set())
