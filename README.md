@@ -59,7 +59,8 @@ The agent service's model provider is chosen by configuration:
 | Setting | Local (default) | Deployed |
 |---|---|---|
 | `AGENT_LLM_PROVIDER` | `ollama` | `openai-compatible` |
-| `AGENT_LLM_MODEL` | `qwen2.5:7b` | `llama-3.3-70b-versatile` |
+| `AGENT_LLM_MODEL` | `qwen2.5:7b` | `qwen/qwen3.8-27b` |
+| `AGENT_LLM_REASONING_EFFORT` | not used | `none` (the model answers without hidden reasoning) |
 | `AGENT_OLLAMA_BASE_URL` | `http://localhost:11434` | not used |
 | `AGENT_LLM_BASE_URL` | not used | `https://api.groq.com/openai/v1` |
 | `AGENT_LLM_API_KEY` | not used | the Groq key (a Render secret) |
@@ -77,7 +78,8 @@ can replace Groq by changing the three `AGENT_LLM_*` values.
   `Payments__PublicBaseUrl`, `Payments__Stripe__SecretKey`, `Payments__Stripe__WebhookSecret`,
   `ForwardedHeaders__Enabled`, `Swagger__Enabled`, `Calendar__TimeZone`, `Seed__DemoUsers`
 - **Agent service:** `AGENT_API_KEY`, `AGENT_API_BASE_URL`, `AGENT_LLM_PROVIDER`,
-  `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY`, `AGENT_LLM_MODEL`
+  `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY`, `AGENT_LLM_MODEL`,
+  `AGENT_LLM_REASONING_EFFORT`
 - **Web (build time, Vercel):** `VITE_API_BASE_URL`
 - **Phone (build time, GitHub Actions variable):** `API_BASE_URL`
 

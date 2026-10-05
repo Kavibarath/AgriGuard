@@ -153,7 +153,7 @@ class OpenAICompatibleProvider:
         return {"Authorization": f"Bearer {self._settings.llm_api_key}"}
 
     async def complete(self, system: str, user: str) -> str:
-        payload = {
+        payload: dict[str, Any] = {
             "model": self._settings.llm_model,
             "messages": [
                 {"role": "system", "content": system},
@@ -163,6 +163,9 @@ class OpenAICompatibleProvider:
             "temperature": self._settings.llm_temperature,
             "max_tokens": self._settings.llm_num_predict,
         }
+        # Hidden reasoning spends the per-minute token budget before any JSON is written.
+        if self._settings.llm_reasoning_effort:
+            payload["reasoning_effort"] = self._settings.llm_reasoning_effort
 
         for attempt in range(self._settings.llm_rate_limit_retries + 1):
             try:

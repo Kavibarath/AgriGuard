@@ -69,6 +69,18 @@ async def test_sends_a_json_mode_chat_completion_with_the_key() -> None:
         {"role": "system", "content": "be brief"},
         {"role": "user", "content": "the case"},
     ]
+    # Not configured, so not sent: providers without reasoning models reject unknown fields.
+    assert "reasoning_effort" not in body
+
+
+@respx.mock
+async def test_sends_the_reasoning_effort_when_configured() -> None:
+    route = respx.post(COMPLETIONS).mock(return_value=completion("{}"))
+    async with httpx.AsyncClient() as client:
+        provider = OpenAICompatibleProvider(client, hosted_settings(llm_reasoning_effort="none"))
+        await provider.complete("s", "u")
+
+    assert json.loads(route.calls.last.request.content)["reasoning_effort"] == "none"
 
 
 @respx.mock

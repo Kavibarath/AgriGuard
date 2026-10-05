@@ -151,9 +151,15 @@ stretch the 100 CU-hours furthest.
 1. Go to <https://console.groq.com>, then **Sign up**. No card is needed.
 2. **API Keys → Create API Key**, name it `agriguard-render`, and copy it. It is shown once, so paste it
    straight into Render in step 3 (or into the Notepad window for a moment).
-3. **Settings → Limits**: note the limits for `llama-3.3-70b-versatile`. One agent run makes
-   roughly 6 to 10 model calls, so the daily token limit allows a handful of runs a day. That is
-   plenty for marking and the viva, but not for load testing.
+3. **Settings → Limits**: the deployment uses `qwen/qwen3.8-27b` (30 requests and 8K tokens a
+   minute, 200K tokens a day on the free plan), with reasoning switched off
+   (`AGENT_LLM_REASONING_EFFORT=none`) so every token goes into the answer. One agent run makes
+   roughly 6 to 10 model calls; when a minute's 8K tokens are used up, the agent waits as Groq
+   asks and carries on, so a run can take a minute or two. The daily limit allows a good number of
+   runs a day: plenty for marking and the viva, not for load testing.
+
+   If that model is ever missing from your Limits page, use `openai/gpt-oss-120b` instead, with
+   `AGENT_LLM_REASONING_EFFORT` = `low` (gpt-oss has no `none`).
 
 The agent talks to Groq through the OpenAI-compatible API (`/chat/completions` with JSON mode).
 Each reply is still validated against the Pydantic schema and repaired at most twice, exactly as
@@ -207,7 +213,7 @@ Render adds a suffix if the name is taken). Note `API_URL` and `AGENT_URL`. Then
 - `API_URL/health` → `"status":"Healthy"` with a `database` check (the API reaches Neon)
 - `API_URL/swagger` → the API reference
 - `AGENT_URL/health/live` → `{"status":"healthy"}`
-- `AGENT_URL/health` → `"provider":"openai-compatible"`, `"model":"llama-3.3-70b-versatile"`, `"llmReachable":true`
+- `AGENT_URL/health` → `"provider":"openai-compatible"`, `"model":"qwen/qwen3.8-27b"`, `"llmReachable":true`
 
 If the API's deploy fails, open **Logs**. A startup refusal names the setting. For example,
 `Jwt:SigningKey must decode to at least 32 bytes` means the generated key didn't suit: set
@@ -260,7 +266,8 @@ If the API's deploy fails, open **Logs**. A startup refusal names the setting. F
 | `AGENT_LLM_PROVIDER` | no | `openai-compatible` (local default: `ollama`) |
 | `AGENT_LLM_BASE_URL` | no | `https://api.groq.com/openai/v1` |
 | `AGENT_LLM_API_KEY` | yes | the Groq key |
-| `AGENT_LLM_MODEL` | no | `llama-3.3-70b-versatile` |
+| `AGENT_LLM_MODEL` | no | `qwen/qwen3.8-27b` |
+| `AGENT_LLM_REASONING_EFFORT` | no | `none` (`low` for gpt-oss) |
 | `PORT` | set by Render | uvicorn binds to it |
 
 ---
@@ -369,7 +376,7 @@ Warm up first (section 6). Accounts and plots are in the README's "Demo accounts
 - [ ] **AI advice (hosted model)**: **Get AI advice**. On the web, `/agent-runs` shows the run move through
       Planning → Diagnosing → Triaging → Drafting → Validating. It reaches **PendingApproval** in well
       under a minute with Groq, or ends **Escalated** with farmer advice when no treatment is possible.
-      Both are correct outcomes. `AGENT_URL/health` shows which model served it (`llama-3.3-70b-versatile`).
+      Both are correct outcomes. `AGENT_URL/health` shows which model served it (`qwen/qwen3.8-27b`).
 - [ ] **Agronomist approval**: approve it on the web. The phone shows the prescription (RX-…) with the do-not-harvest date.
 - [ ] **Order and payment**: as `dealer.anu@agriguard.demo`, the order appears under `/orders`. Pack it, and
       record a **cash** payment (or pay by card on the phone if Stripe is set up).
