@@ -59,6 +59,8 @@ public sealed class GlobalExceptionHandler(
             "The resource was modified by another request. Reload and try again."),
         BusinessRuleException e => WithCode(
             Problem(StatusCodes.Status422UnprocessableEntity, "Business rule violated", e.Message), e.Code),
+        ServiceUnavailableException e => WithCode(
+            Problem(StatusCodes.Status503ServiceUnavailable, "Service unavailable", e.Message), e.Code),
         _ => Problem(StatusCodes.Status500InternalServerError, "An unexpected error occurred",
             environment.IsDevelopment() ? exception.ToString() : null)
     };

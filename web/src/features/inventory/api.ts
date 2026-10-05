@@ -87,6 +87,9 @@ export const listOrders = (query: OrderQuery) => api<PagedResult<Order>>(`/api/o
 export const fulfilOrder = (id: string, status: OrderStatus, pickupCode?: string) =>
   api<Order>(`/api/orders/${id}/fulfil`, { method: 'POST', json: pickupCode === undefined ? { status } : { status, pickupCode } })
 
+/** The farmer paid in cash at the counter. Repeating it is harmless; it returns the order, now paid. */
+export const recordCashPayment = (id: string) => api<Order>(`/api/orders/${id}/payments/cash`, { method: 'POST' })
+
 // ── Regulatory rules ─────────────────────────────────────────────────────────
 
 export const listRules = (query: RuleQuery) => api<PagedResult<CropRule>>(`/api/product-crop-approvals${queryString(query)}`)

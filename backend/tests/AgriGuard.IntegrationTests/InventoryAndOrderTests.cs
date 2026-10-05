@@ -177,6 +177,10 @@ public sealed class InventoryAndOrderTests(AgriGuardApiFactory factory)
     private static Task<HttpResponseMessage> FulfilAsync(HttpClient dealer, Guid orderId, string status, string? pickupCode = null) =>
         dealer.PostAsJsonAsync($"/api/orders/{orderId}/fulfil", new { status, pickupCode });
 
+    /// <summary>The farmer pays in cash at the counter, which the hand-over needs (PaymentTests covers paying).</summary>
+    private static async Task PayCashAsync(HttpClient dealer, Guid orderId) =>
+        (await dealer.PostAsync($"/api/orders/{orderId}/payments/cash", null)).EnsureSuccessStatusCode();
+
     [Fact]
     public async Task An_approved_prescription_s_order_reaches_the_dealer_confirmed()
     {
@@ -199,6 +203,7 @@ public sealed class InventoryAndOrderTests(AgriGuardApiFactory factory)
         var (dealer, orderId) = await ApprovedOrderAsync();
 
         var packed = await FulfilAsync(dealer, orderId, "Packed");
+        await PayCashAsync(dealer, orderId);
         var collected = await FulfilAsync(dealer, orderId, "Collected", await PickupCodeAsync(orderId));
 
         Assert.Equal(HttpStatusCode.OK, packed.StatusCode);
@@ -214,6 +219,7 @@ public sealed class InventoryAndOrderTests(AgriGuardApiFactory factory)
     {
         var (dealer, _, orderId) = await ApprovedOrderWithFarmerAsync();
         await FulfilAsync(dealer, orderId, "Packed");
+        await PayCashAsync(dealer, orderId);
         var code = await PickupCodeAsync(orderId);
         var wrong = code == "000000" ? "111111" : "000000";
 
@@ -255,6 +261,7 @@ public sealed class InventoryAndOrderTests(AgriGuardApiFactory factory)
     {
         var (dealer, farmer, orderId) = await ApprovedOrderWithFarmerAsync();
         await FulfilAsync(dealer, orderId, "Packed");
+        await PayCashAsync(dealer, orderId);
         await FulfilAsync(dealer, orderId, "Collected", await PickupCodeAsync(orderId));
 
         var order = Assert.Single((await farmer.GetFromJsonAsync<JsonElement>("/api/orders/mine")).Items());

@@ -5,6 +5,7 @@ using AgriGuard.Application.Common;
 using AgriGuard.Application.Harvest;
 using AgriGuard.Application.Intelligence;
 using AgriGuard.Application.Inventory;
+using AgriGuard.Application.Payments;
 using AgriGuard.Application.Registry;
 using AgriGuard.Application.Reports;
 using AgriGuard.Application.Validation;
@@ -15,6 +16,7 @@ using AgriGuard.Infrastructure.Harvest;
 using AgriGuard.Infrastructure.Identity;
 using AgriGuard.Infrastructure.Intelligence;
 using AgriGuard.Infrastructure.Inventory;
+using AgriGuard.Infrastructure.Payments;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Persistence.Seed;
 using AgriGuard.Infrastructure.Registry;
@@ -122,6 +124,30 @@ public static class DependencyInjection
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IOrderService, OrderService>();
 
+        // Component C — paying for orders: card through Stripe's hosted checkout, or cash at the counter.
+        // With no Stripe key the gateway reports itself unconfigured and card payments are switched off.
+        services.AddOptions<PaymentOptions>()
+            .Bind(configuration.GetSection(PaymentOptions.SectionName))
+            // A live key or a malformed one stops startup, rather than failing at the first payment.
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<PaymentOptions>, PaymentOptionsValidator>();
+        services.AddHttpClient<IPaymentGateway, StripePaymentGateway>((sp, http) =>
+                http.BaseAddress = sp.GetRequiredService<IOptions<PaymentOptions>>().Value.Stripe.ApiBaseUrl)
+            .AddResilienceHandler("stripe", pipeline =>
+            {
+                // Every request that changes something carries an Idempotency-Key, so a retry after
+                // a dropped connection returns the same result instead of acting twice.
+                pipeline.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 2,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    Delay = TimeSpan.FromMilliseconds(400)
+                });
+                pipeline.AddTimeout(TimeSpan.FromSeconds(10));
+            });
+        services.AddScoped<IPaymentService, PaymentService>();
+
         // Component D — Open-Meteo weather (§10), behind a cache and a resilience pipeline
         services.AddOptions<OpenMeteoOptions>().Bind(configuration.GetSection(OpenMeteoOptions.SectionName));
         services.AddHttpClient<IWeatherProvider, OpenMeteoClient>((sp, http) =>
@@ -157,6 +183,10 @@ public static class DependencyInjection
         services.AddScoped<IHarvestWindowService, HarvestWindowService>();
         services.AddScoped<IHarvestForecastService, HarvestForecastService>();
         services.AddScoped<ICollectionService, CollectionService>();
+        services.AddOptions<CollectionOptions>().Bind(configuration.GetSection(CollectionOptions.SectionName));
+        // Registered as itself too, so tests can run one top-up on demand.
+        services.AddSingleton<CollectionSlotScheduler>();
+        services.AddHostedService(sp => sp.GetRequiredService<CollectionSlotScheduler>());
         services.AddScoped<IOutbreakSignalService, OutbreakSignalService>();
 
         // Reports (§5.1): one read-only service per owning component's reports

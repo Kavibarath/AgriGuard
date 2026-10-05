@@ -14,8 +14,9 @@ import { SelectField } from '@/components/ui/select'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { orderStatusTone } from '@/components/ui/status-tones'
 import { userMessage } from '@/lib/api'
+import { CashPaymentModal } from './CashPaymentModal'
 import { AwaitingCollection } from './DealerPanels'
-import { formatDateTime, formatLkr } from './format'
+import { formatDateTime, formatLkr, formatPaidBy } from './format'
 import { HandOverModal } from './HandOverModal'
 import { useFulfilOrder, useOrders } from './queries'
 import { cn } from '@/lib/utils'
@@ -31,14 +32,16 @@ const views: { value: string; label: string; status?: OrderStatus }[] = [
 
 /**
  * The dealer's orders (§7 /orders). Each approved prescription arrives here Confirmed, with its
- * stock already drawn; the dealer packs it, then hands it over. One button per row performs the
- * next step, and the request names the target status, so a double click cannot skip a step.
+ * stock already drawn; the dealer packs it, then hands it over once it is paid (by card in the
+ * farmer's app, or in cash recorded here). One button per row performs the next step, and the
+ * request names the target status, so a double click cannot skip a step.
  */
 export function OrdersPage() {
   const [params, setParams] = useSearchParams()
   const fulfil = useFulfilOrder()
   const [acting, setActing] = useState<string | null>(null)
   const [handingOver, setHandingOver] = useState<Order | null>(null)
+  const [takingCash, setTakingCash] = useState<Order | null>(null)
 
   const view = views.find((v) => v.value === params.get('view')) ?? views[0]
   const query = {
@@ -118,6 +121,27 @@ export function OrdersPage() {
     { key: 'sprayDate', header: 'Spray date', secondary: true, render: (o) => <span className="whitespace-nowrap">{o.sprayDate ?? '—'}</span> },
     { key: 'total', header: 'Total', sortable: true, numeric: true, secondary: true, render: (o) => formatLkr(o.totalAmount) },
     {
+      key: 'payment',
+      header: 'Payment',
+      render: (o) =>
+        o.paymentStatus === 'Paid' ? (
+          <div className="space-y-0.5">
+            <StatusBadge label="Paid" tone="done" />
+            <p className="text-xs whitespace-nowrap text-stone-600">{formatPaidBy(o)}</p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge label="Unpaid" tone="warning" />
+            {/* Cash can be taken any time before the hand-over; a collected or cancelled order has nothing to pay. */}
+            {(o.status === 'Confirmed' || o.status === 'Packed') && (
+              <Button variant="ghost" className="h-8 px-2" onClick={() => setTakingCash(o)} aria-label={`Record cash: ${o.orderNo}`}>
+                Record cash
+              </Button>
+            )}
+          </div>
+        ),
+    },
+    {
       key: 'status',
       header: 'Status',
       sortable: true,
@@ -152,7 +176,7 @@ export function OrdersPage() {
     <div className="space-y-4 pb-4">
       <PageHeader
         title="Orders"
-        description="Orders from approved prescriptions. The stock is already set aside: pack each order, then hand it over when the farmer shows the pickup code on their phone."
+        description="Orders from approved prescriptions. The stock is already set aside: pack each order, take payment if the farmer has not paid by card in the app, then hand it over when they show the pickup code on their phone."
       />
 
       <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -213,7 +237,8 @@ export function OrdersPage() {
           )}
         </AsyncBoundary>
       </div>
-      <HandOverModal order={handingOver} onClose={() => setHandingOver(null)} />
+      <HandOverModal key={handingOver?.id ?? 'none'} order={handingOver} onClose={() => setHandingOver(null)} />
+      <CashPaymentModal order={takingCash} onClose={() => setTakingCash(null)} />
     </div>
   )
 }

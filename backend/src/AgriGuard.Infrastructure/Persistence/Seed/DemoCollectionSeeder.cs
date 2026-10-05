@@ -1,12 +1,13 @@
 using AgriGuard.Domain.Harvest;
+using AgriGuard.Infrastructure.Harvest;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriGuard.Infrastructure.Persistence.Seed;
 
 /// <summary>
 /// Collection centres in the two demo districts, each with three morning slots a day for the next
-/// four weeks, so harvest bookings can be demonstrated. More slots are opened through
-/// POST /api/collection-slots. Idempotent, and only runs where Seed:DemoUsers is true.
+/// four weeks, so harvest bookings can be demonstrated. After that, CollectionSlotScheduler keeps
+/// the standard slots open ahead, and planners open extra ones through POST /api/collection-slots. Idempotent, and only runs where Seed:DemoUsers is true.
 ///
 /// ⚠ Academic sample data: names and coordinates approximate real economic centres.
 /// </summary>
@@ -78,22 +79,14 @@ public static class DemoCollectionSeeder
         }
         db.CollectionCentres.AddRange(centres);
 
-        // Three morning slots a day, splitting the centre's daily capacity evenly.
+        await db.SaveChangesAsync(ct);
+
+        // The same three morning slots a day the scheduler keeps open (CollectionSlotScheduler),
+        // so a freshly seeded database is bookable before the scheduler's first run.
         var start = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
-        var times = new[] { (new TimeOnly(7, 0), new TimeOnly(9, 0)), (new TimeOnly(9, 0), new TimeOnly(11, 0)), (new TimeOnly(11, 0), new TimeOnly(13, 0)) };
         foreach (var centre in centres)
             for (var day = 0; day < Days; day++)
-                for (var i = 0; i < times.Length; i++)
-                    db.CollectionSlots.Add(new CollectionSlot
-                    {
-                        Centre = centre,
-                        SlotDate = start.AddDays(day),
-                        SlotIndex = i + 1,
-                        StartTime = times[i].Item1,
-                        EndTime = times[i].Item2,
-                        CapacityKg = centre.DailyCapacityKg / times.Length
-                    });
-
+                db.CollectionSlots.AddRange(StandardSlots.ForDay(centre.Id, centre.DailyCapacityKg, start.AddDays(day)));
         await db.SaveChangesAsync(ct);
     }
 }

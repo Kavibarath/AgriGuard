@@ -49,6 +49,7 @@ public class AgriGuardDbContext(
     public DbSet<StockReservationLine> StockReservationLines => Set<StockReservationLine>();
     public DbSet<InputOrder> InputOrders => Set<InputOrder>();
     public DbSet<InputOrderLine> InputOrderLines => Set<InputOrderLine>();
+    public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Prescription> Prescriptions => Set<Prescription>();
 
     // Component D — Harvest, logistics & intelligence
