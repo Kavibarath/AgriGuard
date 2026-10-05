@@ -85,6 +85,13 @@ services:
       # Groq's OpenAI-compatible endpoint. For Gemini instead, see docs/DEPLOYMENT.md.
       - key: AGENT_LLM_BASE_URL
         value: https://api.groq.com/openai/v1
-      # Not a reasoning model, so max_tokens is not spent on hidden reasoning before the JSON.
+      # One of the models on this Groq account's free plan (8K tokens a minute, 200K a day).
       - key: AGENT_LLM_MODEL
-        value: llama-3.3-70b-versatile
+        value: qwen/qwen3.8-27b
+      # Reasoning off: every token goes into the JSON answer, which keeps runs inside 8K tokens a
+      # minute. Fallback model: openai/gpt-oss-120b with "low" (it has no "none").
+      - key: AGENT_LLM_REASONING_EFFORT
+        value: none
+      # 8K tokens a minute fills in two or three calls; wait it out a few more times than locally.
+      - key: AGENT_LLM_RATE_LIMIT_RETRIES
+        value: "4"

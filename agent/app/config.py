@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # e.g. https://api.groq.com/openai/v1, and that provider's key.
     llm_base_url: str = ""
     llm_api_key: str = Field(default="", repr=False)
+    # Optional, "openai-compatible" only: sent as `reasoning_effort` to models that think before
+    # answering ("none" for Groq's Qwen, "low" for gpt-oss). Empty sends nothing.
+    llm_reasoning_effort: str = ""
     llm_model: str = "qwen2.5:7b"
     # Low but not zero: near-deterministic output, which keeps a demo repeatable.
     llm_temperature: float = 0.1
