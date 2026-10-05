@@ -61,7 +61,11 @@ describe('InventoryPage', () => {
     await user.type(within(dialog).getByLabelText('Batch number'), 'MZ-2701')
     await user.type(within(dialog).getByLabelText('Expiry date'), '2028-01-31')
     await user.type(within(dialog).getByLabelText('Quantity on hand (kg)'), '25')
-    await user.type(within(dialog).getByLabelText('Price per pack (LKR)'), '2350')
+    // The co-op's reference price is filled in; this dealer sells a little cheaper.
+    const price = within(dialog).getByLabelText('Price per pack (LKR)')
+    expect(price).toHaveValue(2400)
+    await user.clear(price)
+    await user.type(price, '2350')
     await user.click(within(dialog).getByRole('button', { name: 'Add to shelf' }))
 
     await waitFor(() =>
@@ -99,10 +103,28 @@ describe('InventoryPage', () => {
     await user.type(within(dialog).getByLabelText('Batch number'), 'MZ-2601')
     await user.type(within(dialog).getByLabelText('Expiry date'), '2028-01-31')
     await user.type(within(dialog).getByLabelText('Quantity on hand (kg)'), '5')
-    await user.type(within(dialog).getByLabelText('Price per pack (LKR)'), '2400')
     await user.click(within(dialog).getByRole('button', { name: 'Add to shelf' }))
 
     expect(await within(dialog).findByText(/already on your shelf/)).toBeInTheDocument()
+  })
+
+  it('fills in the reference price and shows the packs and the value as the quantity is typed', async () => {
+    const user = userEvent.setup()
+    renderApp('/inventory')
+
+    await user.click(await screen.findByRole('button', { name: 'Receive delivery' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.selectOptions(within(dialog).getByLabelText('Product'), 'p-mancozeb')
+
+    expect(within(dialog).getByLabelText('Price per pack (LKR)')).toHaveValue(2400)
+    expect(within(dialog).getByText(/Co-op reference price LKR 2,400.00 per 1 kg pack/)).toBeInTheDocument()
+
+    await user.type(within(dialog).getByLabelText('Quantity on hand (kg)'), '20')
+    expect(within(dialog).getByRole('status')).toHaveTextContent('20 kg = 20 packs of 1 kg × LKR 2,400.00 = LKR 48,000.00 on the shelf')
+
+    await user.clear(within(dialog).getByLabelText('Quantity on hand (kg)'))
+    await user.type(within(dialog).getByLabelText('Quantity on hand (kg)'), '2.5')
+    expect(within(dialog).getByRole('status')).toHaveTextContent('2.5 packs (not a whole number of packs)')
   })
 
   it('explains why a recount cannot go below what is held', async () => {

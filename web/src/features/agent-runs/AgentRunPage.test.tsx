@@ -246,6 +246,62 @@ describe('AgentRunPage', () => {
     expect(sent).toHaveLength(0)
   })
 
+  it('after a revision request, shows the run revising and polls until the new proposal is back', async () => {
+    signIn()
+    let status: string = 'PendingApproval'
+    let revised = false
+    server.use(
+      http.get(`${API_BASE_URL}/api/agent-runs/:id`, () => HttpResponse.json(makeRun({ status: status as never }))),
+      http.post(decisionUrl, async () => {
+        status = 'RevisionRequested'
+        revised = true
+        return HttpResponse.json(makeDecisionResult())
+      }),
+      http.get(`${API_BASE_URL}/api/agent-runs/:id/events`, () =>
+        HttpResponse.json({
+          items:
+            status === 'PendingApproval' && !revised
+              ? []
+              : [
+                  {
+                    id: 'ev-revise',
+                    eventType: 'ApprovalDecided',
+                    agentRole: null,
+                    toolName: null,
+                    payload: { decision: 'Revise', reason: 'Use a spray day after the rain' },
+                    durationMs: null,
+                    occurredAt: '2026-10-05T06:26:31Z',
+                    correlationId: null,
+                  },
+                ],
+          page: 1,
+          pageSize: 200,
+          totalCount: 1,
+          totalPages: 1,
+        }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderApp(`/agent-runs/${RUN_ID}`)
+
+    await user.click(await screen.findByRole('button', { name: 'Request revision' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('What should the agent change?'), 'Use a spray day after the rain')
+    await user.click(within(dialog).getByRole('button', { name: 'Request revision' }))
+
+    // The decision panel goes, the run says it is revising, and the old proposal is put away.
+    expect(await screen.findByText('Revising')).toBeInTheDocument()
+    expect(await screen.findByText('Sent back to the agents')).toBeInTheDocument()
+    expect(screen.getByText(/Your guidance: “Use a spray day after the rain”/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Proposed treatment' })).not.toBeInTheDocument()
+
+    // The agents finish: polling brings the new proposal back for a decision.
+    status = 'PendingApproval'
+    expect(await screen.findByRole('button', { name: 'Approve' }, { timeout: 6000 })).toBeInTheDocument()
+    expect(await screen.findByText('Revised proposal')).toBeInTheDocument()
+  }, 15000)
+
   it('explains a proposal that no longer passes the rules at approval time', async () => {
     signIn()
     server.use(

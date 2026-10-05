@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { caseStatusTone, runStatusTone, severityTone } from '@/components/ui/status-tones'
 import { useCurrentUser } from '@/features/auth/auth-store'
 import { can } from '@/features/auth/policies'
+import { formatDateTime } from '@/lib/dates'
 import { CasePhotos } from './CasePhotos'
 import { DecisionPanel } from './DecisionPanel'
 import { localDate } from './format'
@@ -17,7 +18,17 @@ import { RunSteps } from './RunSteps'
 import { RunTimeline } from './RunTimeline'
 import { TriageCard } from './TriageCard'
 import { VerdictCard } from './VerdictCard'
-import { caseStatusLabels, runStatusLabels, workingStatuses, type CaseDetail } from './types'
+import { caseStatusLabels, runStatusLabels, workingStatuses, type AgentRunEvent, type CaseDetail } from './types'
+
+/** The agronomist's latest "send back to the agent", if there was one: when, and what they asked for. */
+function latestRevisionRequest(events: AgentRunEvent[]): { at: string; guidance: string | null } | null {
+  const revise = [...events]
+    .filter((e) => e.eventType === 'ApprovalDecided' && e.payload?.decision === 'Revise')
+    .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+    .at(-1)
+  if (!revise) return null
+  return { at: revise.occurredAt, guidance: typeof revise.payload?.reason === 'string' ? revise.payload.reason : null }
+}
 
 /**
  * The agent-run console (§7, /agent-runs/:runId): everything the agronomist needs to trust or
@@ -32,6 +43,10 @@ export function AgentRunPage() {
   const events = useRunEvents(runId, run.data?.status)
 
   const working = run.data !== undefined && workingStatuses.includes(run.data.status)
+  // After "Request revision" the old proposal and its verdict stay on the run until the agents
+  // replace them; while they work, they are out of date and are not shown.
+  const revision = latestRevisionRequest(events.data?.items ?? [])
+  const revising = working && revision !== null
   const ended = run.data?.status === 'Failed' || run.data?.status === 'Rejected' || run.data?.status === 'TimedOut'
 
   return (
@@ -60,6 +75,20 @@ export function AgentRunPage() {
               className="pb-2"
             />
 
+            {revising && (
+              <Alert tone="info" title="Sent back to the agents">
+                {revision.guidance ? <>Your guidance: “{revision.guidance}”. </> : null}
+                The four agents are drafting a new proposal, usually in about a minute, and the safety rules will check it again. This page updates by itself.
+              </Alert>
+            )}
+
+            {run.data.status === 'PendingApproval' && revision && (
+              <Alert tone="success" title="Revised proposal">
+                Drafted again after your revision request of {formatDateTime(revision.at)}
+                {revision.guidance ? <>: “{revision.guidance}”</> : null}. Check the new proposal and the safety rules before deciding.
+              </Alert>
+            )}
+
             {run.data.status === 'Escalated' && (
               <Alert tone="warning" title="Handed to an agronomist">
                 {run.data.failureReason} The case is in the manual review queue; no treatment was drafted.
@@ -80,11 +109,11 @@ export function AgentRunPage() {
               <div className="space-y-4 xl:col-span-8">
                 {cropCase.data && <CaseContext detail={cropCase.data} />}
                 {run.data.triage && <TriageCard triage={run.data.triage} />}
-                {run.data.verdict && <VerdictCard verdict={run.data.verdict} review={run.data.safetyReview} />}
+                {run.data.verdict && !revising && <VerdictCard verdict={run.data.verdict} review={run.data.safetyReview} />}
               </div>
               <div className="space-y-4 xl:col-span-4">
                 {run.data.prescription && <PrescriptionCard prescription={run.data.prescription} />}
-                {run.data.proposal && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
+                {run.data.proposal && !revising && <ProposalCard proposal={run.data.proposal} productName={run.data.proposedProductName} productUnit={run.data.proposedProductUnit} />}
                 {run.data.status === 'PendingApproval' && (
                   <DecisionPanel run={run.data} canDecide={can(user?.role, 'CanApprovePrescriptions')} />
                 )}
