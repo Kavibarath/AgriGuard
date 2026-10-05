@@ -1,0 +1,43 @@
+# Wakes the free Render services before a demo, viva or marking session (about a minute each when asleep).
+# Manual only, on purpose: a scheduled keep-alive would burn the free plan's monthly instance hours
+# (and Neon's compute hours) and could get the services suspended before the 21 Oct deadline.
+# Uses the repository variables API_BASE_URL and AGENT_BASE_URL (Settings → Secrets and variables → Actions → Variables).
+name: warm-up
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wake:
+    name: Wake the API, the database and the agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wake
+        env:
+          API: ${{ vars.API_BASE_URL }}
+          AGENT: ${{ vars.AGENT_BASE_URL }}
+        run: |
+          set -u
+          wake() {
+            for attempt in 1 2 3 4 5 6; do
+              if body=$(curl -fsS --max-time 120 "$1"); then
+                echo "$1 -> $body"
+                return 0
+              fi
+              echo "$1 not ready (attempt $attempt), retrying in 15 s"
+              sleep 15
+            done
+            echo "::error::$1 did not answer"
+            return 1
+          }
+          status=0
+          # Both at once: each service wakes independently.
+          wake "$API/health" & api=$!
+          wake "$AGENT/health" & agent=$!
+          wait $api || status=1
+          wait $agent || status=1
+          exit $status

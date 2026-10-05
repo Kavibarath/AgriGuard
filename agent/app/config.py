@@ -16,9 +16,14 @@ class Settings(BaseSettings):
     api_key: str = Field(default="", repr=False)
 
     # ── LLM provider ────────────────────────────────────────────────────────
-    # "ollama" locally and for the viva; "hosted" in the cloud, where no GPU exists.
+    # "ollama" locally and for the viva; "openai-compatible" in the cloud, where no GPU exists
+    # (Groq, Gemini's OpenAI endpoint, or any server that speaks /chat/completions).
     llm_provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
+    # Used only by "openai-compatible": the base URL up to and including the version segment,
+    # e.g. https://api.groq.com/openai/v1, and that provider's key.
+    llm_base_url: str = ""
+    llm_api_key: str = Field(default="", repr=False)
     llm_model: str = "qwen2.5:7b"
     # Low but not zero: near-deterministic output, which keeps a demo repeatable.
     llm_temperature: float = 0.1
@@ -27,6 +32,10 @@ class Settings(BaseSettings):
     # ── Limits (§9.3). Exceeding any of these ends the run safely. ──────────
     tool_timeout_seconds: float = 20.0
     llm_timeout_seconds: float = 90.0
+    # Hosted free tiers rate-limit per minute; a 429 is waited out at most this many times, and
+    # never longer than llm_max_retry_wait_seconds per wait.
+    llm_rate_limit_retries: int = 2
+    llm_max_retry_wait_seconds: float = 20.0
     run_timeout_seconds: float = 300.0
     tool_retries: int = 2
     schema_repair_attempts: int = 2

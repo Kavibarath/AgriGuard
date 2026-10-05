@@ -8,13 +8,21 @@ py -3.12 -m venv .venv
 .venv\Scripts\activate          # Windows;  source .venv/bin/activate elsewhere
 pip install -e ".[dev]"
 
-pytest -q                       # 27 tests, no model or database needed
+pytest -q                       # no model or database needed
 ruff check . && mypy app
 uvicorn app.main:app --port 8000 --reload
 ```
 
 Configuration is environment variables with an `AGENT_` prefix (see `app/config.py`):
-`AGENT_API_BASE_URL`, `AGENT_API_KEY`, `AGENT_LLM_MODEL`, `AGENT_OLLAMA_BASE_URL`.
+`AGENT_API_BASE_URL`, `AGENT_API_KEY`, `AGENT_LLM_PROVIDER`, `AGENT_LLM_MODEL`, and then either
+`AGENT_OLLAMA_BASE_URL` (provider `ollama`, the default) or `AGENT_LLM_BASE_URL` plus
+`AGENT_LLM_API_KEY` (provider `openai-compatible`: Groq in the deployment, or Gemini).
+
+`GET /health/live` answers without calling anything (the host's probe). `GET /health` also asks
+the provider whether it is reachable: Ollama's `/api/tags`, or `/models` on a hosted provider,
+which spends no tokens.
+
+`docker build -t agriguard-agent .` builds the deployable image; it listens on `$PORT` (default 8000).
 
 ## The graph
 
@@ -56,7 +64,7 @@ app/
   config.py      settings (env, AGENT_ prefix)
   contracts.py   Pydantic I/O for each agent
   prompts.py     system prompts + untrusted-input handling
-  llm.py         provider (Ollama) + structured output with repair
+  llm.py         providers (Ollama, OpenAI-compatible) + structured output with repair
   tools.py       allow-listed tool client
   graph.py       the LangGraph state graph
   runner.py      run execution, limits, safe failure, backend reporting

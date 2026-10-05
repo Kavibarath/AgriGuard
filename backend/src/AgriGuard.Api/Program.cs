@@ -7,6 +7,7 @@ using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Infrastructure;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
 using Serilog.Events;
 
@@ -67,7 +68,31 @@ try
         .AllowAnyMethod()
         .WithExposedHeaders(CorrelationIdMiddleware.HeaderName)));
 
+    // Behind a TLS-terminating proxy (Render) the API sees plain HTTP from the proxy's address.
+    // The proxy's X-Forwarded-Proto/-For restore the real scheme (so HTTPS redirection does not
+    // loop) and the real client (so the rate limiter does not put every caller in one bucket).
+    // Off unless configured: locally there is no proxy, and trusting the headers there would let
+    // any client claim to be someone else.
+    var forwardedHeaders = builder.Configuration.GetValue("ForwardedHeaders:Enabled", false);
+    if (forwardedHeaders)
+    {
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            // The proxy's addresses are not published, so no network is pre-trusted...
+            options.KnownIPNetworks.Clear();
+            options.KnownProxies.Clear();
+            // ...and only the last hop is read: the one the proxy appended itself. Values a client
+            // put in front of it are ignored.
+            options.ForwardLimit = 1;
+        });
+    }
+
     var app = builder.Build();
+
+    // First, so logging, the rate limiter and HTTPS redirection all see the real scheme and client.
+    if (forwardedHeaders)
+        app.UseForwardedHeaders();
 
     app.UseMiddleware<CorrelationIdMiddleware>();
     app.UseSerilogRequestLogging(options =>
@@ -94,7 +119,7 @@ try
     }
 
     // Locally the Android emulator (10.0.2.2) and Vite call plain http://localhost:5000.
-    // Behind Render's TLS proxy this also needs forwarded headers — configured with deployment.
+    // Behind Render's TLS proxy this relies on the forwarded headers above (ForwardedHeaders:Enabled).
     if (!app.Environment.IsDevelopment())
         app.UseHttpsRedirection();
     app.UseCors();

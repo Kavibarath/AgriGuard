@@ -18,6 +18,7 @@ demo data are sample data.
 
 ## Contents
 
+- [Live system](#live-system)
 - [What it does](#what-it-does)
 - [How it works](#how-it-works)
 - [The eleven safety rules](#the-eleven-safety-rules)
@@ -29,6 +30,56 @@ demo data are sample data.
 - [Card payments (optional)](#card-payments-optional)
 - [Tests and CI](#tests-and-ci)
 - [Documentation](#documentation)
+
+---
+
+## Live system
+
+| | URL |
+|---|---|
+| Web console (React) | `https://<web>.vercel.app` *(to be filled in)* |
+| API health | `https://<api>.onrender.com/health` *(to be filled in)* |
+| API reference (Swagger) | `https://<api>.onrender.com/swagger` *(to be filled in)* |
+| Agent service health | `https://<agent>.onrender.com/health` *(to be filled in)* |
+| Android APK | GitHub **Releases** → `app-release.apk` *(to be filled in)* |
+
+The services run on free plans: PostgreSQL on **Neon**, the API and the agent service on
+**Render** (Docker, Singapore), the web console on **Vercel**, and the language model on **Groq**.
+A free Render service sleeps after 15 minutes without requests, so **the first request after a
+quiet spell takes about a minute**. Open the API health URL first and wait for it to answer. The
+demo accounts below work on the live system too.
+
+How it was deployed, every environment variable by name, and how to wake it before a demo:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+### The model in the cloud
+
+The agent service's model provider is chosen by configuration:
+
+| Setting | Local (default) | Deployed |
+|---|---|---|
+| `AGENT_LLM_PROVIDER` | `ollama` | `openai-compatible` |
+| `AGENT_LLM_MODEL` | `qwen2.5:7b` | `llama-3.3-70b-versatile` |
+| `AGENT_OLLAMA_BASE_URL` | `http://localhost:11434` | not used |
+| `AGENT_LLM_BASE_URL` | not used | `https://api.groq.com/openai/v1` |
+| `AGENT_LLM_API_KEY` | not used | the Groq key (a Render secret) |
+
+Both providers ask for JSON-only output (Ollama's `format: json`, the OpenAI API's JSON mode), and
+every reply is still validated against its Pydantic schema and repaired at most twice. The agents,
+prompts and safety rules are identical in both places. On a hosted rate limit (HTTP 429), the
+agent waits as the provider asks, a bounded number of times. Gemini's OpenAI-compatible endpoint
+can replace Groq by changing the three `AGENT_LLM_*` values.
+
+### Deployed environment variables (names only)
+
+- **API:** `ConnectionStrings__Default`, `Jwt__SigningKey`, `AgentService__ApiKey`,
+  `AgentService__BaseUrl`, `AgentService__DispatchTimeout`, `Cors__AllowedOrigins__0`,
+  `Payments__PublicBaseUrl`, `Payments__Stripe__SecretKey`, `Payments__Stripe__WebhookSecret`,
+  `ForwardedHeaders__Enabled`, `Swagger__Enabled`, `Calendar__TimeZone`, `Seed__DemoUsers`
+- **Agent service:** `AGENT_API_KEY`, `AGENT_API_BASE_URL`, `AGENT_LLM_PROVIDER`,
+  `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY`, `AGENT_LLM_MODEL`
+- **Web (build time, Vercel):** `VITE_API_BASE_URL`
+- **Phone (build time, GitHub Actions variable):** `API_BASE_URL`
 
 ---
 
@@ -138,11 +189,13 @@ backend/
   src/AgriGuard.Infrastructure/  EF Core, services, migrations, seeders, Stripe and Open-Meteo clients
   src/AgriGuard.Api/             controllers, auth policies, validation, error handling
   tests/                         unit tests and integration tests (Testcontainers)
-agent/                           the four LangGraph agents (FastAPI service) and their tests
-web/                             the React web console
+  Dockerfile                     the API's container image (Render)
+agent/                           the four LangGraph agents (FastAPI service), their tests and Dockerfile
+web/                             the React web console (vercel.json: SPA rewrite for Vercel)
 mobile/                          the Flutter phone app
 docs/                            plan, design notes, study notes (handover/), guides
 docker-compose.yml               local PostgreSQL
+render.yaml                      Render Blueprint for the API and the agent service
 ```
 
 ---
@@ -225,6 +278,9 @@ AGENT_OLLAMA_BASE_URL=http://localhost:11434
 AGENT_LLM_MODEL=qwen2.5:7b
 ```
 
+`AGENT_LLM_PROVIDER` defaults to `ollama`, so nothing else is needed locally. To try the hosted
+model instead, see "The model in the cloud" above.
+
 ```bash
 uvicorn app.main:app --port 8000
 ```
@@ -260,7 +316,8 @@ real phone on the same network: `flutter run --dart-define=API_BASE_URL=http://<
 
 ## Demo accounts
 
-All demo accounts share the password **`AgriGuard!Demo1`** (Development only).
+All demo accounts share the password **`AgriGuard!Demo1`**, locally and on the live system. They
+are sample accounts on sample data, seeded for the demo and marking; card payments are test mode only.
 
 | Account | Role | Notes |
 |---|---|---|
@@ -310,7 +367,10 @@ If the full web suite times out on a busy machine, run it with fewer workers:
 
 GitHub Actions runs a separate workflow for the backend, the agents, the web console and the phone
 app on every pull request to `main` and every push to it, plus a secret scan (gitleaks). The phone
-workflow also builds the release APK as a downloadable artifact (`agriguard-mobile-apk`).
+workflow also builds the release APK as a downloadable artifact (`agriguard-mobile-apk`), pointed
+at the live API through the repository variable `API_BASE_URL`. Two manual workflows support the
+deployment: `warm-up` wakes the sleeping free services before a demo, and `db-migrate` applies the
+migrations to the deployed database when a local network blocks PostgreSQL.
 
 ---
 
@@ -319,6 +379,7 @@ workflow also builds the release APK as a downloadable artifact (`agriguard-mobi
 | Document | What it is |
 |---|---|
 | [docs/PROJECT-PLAN.md](docs/PROJECT-PLAN.md) | The full project plan and its decisions |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | The live deployment step by step (Neon, Render, Groq, Vercel, APK), its environment variables and the smoke test |
 | [docs/MANUAL-TEST-GUIDE.md](docs/MANUAL-TEST-GUIDE.md) | An end-to-end manual test of the whole system, with a checklist |
 | [docs/DEMO-AGRONOMIST.md](docs/DEMO-AGRONOMIST.md) | A step-by-step demo of every page the field agronomist has |
 | [docs/COMPONENT-OWNERSHIP.md](docs/COMPONENT-OWNERSHIP.md) | Which files make up each component |
