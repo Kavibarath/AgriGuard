@@ -1,5 +1,6 @@
 using AgriGuard.Application.Agent;
 using AgriGuard.Application.Auth;
+using AgriGuard.Application.Payments;
 using AgriGuard.Application.Weather;
 using AgriGuard.Domain.Identity;
 using AgriGuard.Infrastructure.Persistence;
@@ -33,6 +34,9 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
     /// <summary>Replaces Open-Meteo: tests never reach the internet. Calm, dry weather unless a test says otherwise.</summary>
     public FakeWeatherProvider Weather { get; } = new();
 
+    /// <summary>Replaces Stripe: card payments without the internet. Configured unless a test switches it off.</summary>
+    public FakePaymentGateway Payments { get; } = new();
+
     // Same major version as docker-compose.yml, so tests exercise what we run locally.
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
 
@@ -57,6 +61,10 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
         // throttle unrelated tests. The rate-limit test lowers this again for itself.
         builder.UseSetting("RateLimiting:Auth:PermitLimit", "10000");
 
+        // The tests plan their own collection slots; the background top-up would add slots to every
+        // test centre and turn "no room" cases into bookings.
+        builder.UseSetting("Collection:OpenSlotsAutomatically", "false");
+
         // Test-only controllers (FaultsController, SecureController) live in this assembly.
         builder.ConfigureTestServices(services =>
         {
@@ -65,6 +73,8 @@ public sealed class AgriGuardApiFactory : WebApplicationFactory<Program>, IAsync
             services.AddSingleton<IAgentDispatcher>(Dispatcher);
             services.RemoveAll<IWeatherProvider>();
             services.AddSingleton<IWeatherProvider>(Weather);
+            services.RemoveAll<IPaymentGateway>();
+            services.AddSingleton<IPaymentGateway>(Payments);
         });
     }
 

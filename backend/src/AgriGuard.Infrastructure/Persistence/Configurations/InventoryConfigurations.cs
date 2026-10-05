@@ -178,7 +178,47 @@ internal sealed class InputOrderConfiguration : IEntityTypeConfiguration<InputOr
         b.HasIndex(x => new { x.DealerId, x.Status });
         b.HasIndex(x => x.FarmerId);
 
+        // Existing orders, made before payments, start Unpaid like every new one.
+        b.Property(x => x.PaymentStatus).HasDefaultValue(OrderPaymentStatus.Unpaid).HasSentinel(OrderPaymentStatus.Unpaid);
+
         b.ToTable(t => t.HasCheckConstraint("ck_orders_total_non_negative", "total_amount >= 0"));
+    }
+}
+
+internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
+{
+    public void Configure(EntityTypeBuilder<Payment> b)
+    {
+        b.ToTable("payments", t =>
+        {
+            t.HasCheckConstraint("ck_payments_amount_positive", "amount > 0");
+            // Only the provider's own attempts carry a session; counter cash never does.
+            t.HasCheckConstraint("ck_payments_card_has_provider", "method <> 'Card' OR provider <> 'counter'");
+        });
+
+        b.Property(x => x.Amount).HasPrecision(14, 2);
+        b.Property(x => x.Currency).HasMaxLength(3).IsFixedLength();
+        b.Property(x => x.Provider).HasMaxLength(20);
+        b.Property(x => x.ProviderReference).HasMaxLength(255);
+        b.Property(x => x.ProviderPaymentId).HasMaxLength(255);
+        b.Property(x => x.CheckoutUrl).HasMaxLength(2048);
+        b.Property(x => x.CardBrand).HasMaxLength(20);
+        b.Property(x => x.CardLast4).HasMaxLength(4);
+        b.Property(x => x.FailureReason).HasMaxLength(500);
+        b.Property(x => x.Version).IsRowVersion();
+
+        b.HasOne(x => x.Order).WithMany(o => o.Payments).HasForeignKey(x => x.OrderId);
+        b.HasOne(x => x.RecordedBy).WithMany().HasForeignKey(x => x.RecordedById);
+
+        // An order's attempts, by status: the open checkout, the payment that settled it.
+        b.HasIndex(x => new { x.OrderId, x.Status });
+        // A webhook or a return page finds its attempt by the provider's session id.
+        b.HasIndex(x => x.ProviderReference).IsUnique().HasFilter("provider_reference IS NOT NULL");
+        // At most one open card checkout per order, so two taps cannot open two ways to pay.
+        b.HasIndex(x => x.OrderId)
+            .IsUnique()
+            .HasFilter("status = 'Pending' AND method = 'Card'")
+            .HasDatabaseName("ux_payments_one_pending_card_per_order");
     }
 }
 

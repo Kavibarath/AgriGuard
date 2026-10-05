@@ -95,6 +95,12 @@ public sealed record OrderDto(
     string? PrescriptionNo,
     DateOnly? SprayDate,
     decimal TotalAmount,
+    OrderPaymentStatus PaymentStatus,
+    DateTime? PaidAt,
+    // How it was paid, and the card's brand and last four digits for a card payment.
+    PaymentMethod? PaidBy,
+    string? CardBrand,
+    string? CardLast4,
     DateTime CreatedAt,
     DateTime? ConfirmedAt,
     DateTime? PackedAt,
@@ -117,6 +123,15 @@ public sealed record FarmerOrderDto(
     string? PrescriptionNo,
     DateOnly? SprayDate,
     decimal TotalAmount,
+    OrderPaymentStatus PaymentStatus,
+    DateTime? PaidAt,
+    PaymentMethod? PaidBy,
+    string? CardBrand,
+    string? CardLast4,
+    // A card checkout still open for this order: the app checks it when the farmer comes back.
+    Guid? OpenPaymentId,
+    // Whether the farmer can pay by card right now (unpaid, payable, and card payments switched on).
+    bool CanPayByCard,
     DateTime CreatedAt,
     DateTime? ConfirmedAt,
     DateTime? PackedAt,

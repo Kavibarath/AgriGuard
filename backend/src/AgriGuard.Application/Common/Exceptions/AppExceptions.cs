@@ -45,3 +45,13 @@ public sealed class BusinessRuleException(string code, string message) : AppExce
 {
     public string Code { get; } = code;
 }
+
+/// <summary>
+/// 503 — a feature that depends on an outside service is switched off or that service could not be
+/// reached (e.g. card payments with no provider key, or the provider not answering). Nothing was
+/// changed, and trying again later may work. <paramref name="code"/> works as for 422.
+/// </summary>
+public sealed class ServiceUnavailableException(string code, string message) : AppException(message)
+{
+    public string Code { get; } = code;
+}

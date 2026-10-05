@@ -65,6 +65,13 @@ export const createSlot = (input: NewSlot) => api<CollectionSlot>('/api/collecti
 export const listBookings = (query: BookingQuery) =>
   api<PagedResult<CollectionBooking>>(`/api/collection-bookings${queryString(query)}`)
 
+/** Co-op staff at the centre: CheckedIn, Completed (with the weight) or NoShow. Repeating it is harmless. */
+export const recordBooking = (id: string, status: 'CheckedIn' | 'Completed' | 'NoShow', actualQuantityKg?: number) =>
+  api<CollectionBooking>(`/api/collection-bookings/${id}/record`, {
+    method: 'POST',
+    json: actualQuantityKg === undefined ? { status } : { status, actualQuantityKg },
+  })
+
 /** The coming days' spray suitability at a plot, from the same weather the V8 rule uses. */
 export const getSprayWindow = (plotId: string, days = 7) =>
   api<SprayWindow>(`/api/weather/spray-window${queryString({ plotId, days })}`)

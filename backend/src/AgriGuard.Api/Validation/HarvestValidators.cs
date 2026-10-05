@@ -1,4 +1,5 @@
 using AgriGuard.Application.Harvest;
+using AgriGuard.Domain.Harvest;
 using FluentValidation;
 
 namespace AgriGuard.Api.Validation;
@@ -39,5 +40,19 @@ public sealed class AllocateBookingRequestValidator : AbstractValidator<Allocate
     {
         RuleFor(x => x.CropCycleId).NotEmpty().WithMessage("Choose the crop to deliver.");
         RuleFor(x => x.QuantityKg).GreaterThan(0).WithMessage("Enter how many kg you will deliver.").LessThanOrEqualTo(20_000);
+    }
+}
+
+public sealed class RecordBookingRequestValidator : AbstractValidator<RecordBookingRequest>
+{
+    public RecordBookingRequestValidator()
+    {
+        RuleFor(x => x.Status)
+            .Must(s => BookingStatusRules.Recordable.Contains(s))
+            .WithMessage("Record CheckedIn, Completed or NoShow.");
+        // The weight belongs to completing a delivery, and only there.
+        RuleFor(x => x.ActualQuantityKg)
+            .Null().When(x => x.Status != BookingStatus.Completed)
+            .WithMessage("A weight is recorded only when the delivery is completed.");
     }
 }

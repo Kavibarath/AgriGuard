@@ -1,9 +1,14 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * Accessible modal: labelled by its heading, closes on Escape, moves focus in on open and back
  * to the trigger on close, and marks the rest of the page inert so a keyboard or screen-reader
  * user cannot tab behind it.
+ *
+ * Rendered into document.body through a portal. Opened from inside a card that animates in (a
+ * transform makes its own stacking context), a fixed z-50 overlay would only rank within that
+ * card, and a later sticky table header could paint over the dialog.
  */
 export function Modal({
   open,
@@ -55,7 +60,7 @@ export function Modal({
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Clicking the backdrop dismisses, matching the Escape key. */}
       <div className="absolute inset-0 bg-brand-900/45" onClick={onClose} aria-hidden="true" />
@@ -79,6 +84,7 @@ export function Modal({
         </header>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

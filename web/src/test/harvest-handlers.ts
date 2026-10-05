@@ -111,6 +111,7 @@ export function makeBooking(overrides: Partial<CollectionBooking> = {}): Collect
     cropName: 'Tomato',
     farmerName: 'Sunil Perera',
     quantityKg: 400,
+    actualQuantityKg: null,
     distanceKm: 2.3,
     createdAt: '2026-09-26T08:00:00Z',
     ...overrides,

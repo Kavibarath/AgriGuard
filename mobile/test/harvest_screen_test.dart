@@ -60,17 +60,18 @@ SprayWindow sprayWeek() => SprayWindow(
       ],
     );
 
-CollectionBooking booking({String status = 'Booked'}) => CollectionBooking(
+CollectionBooking booking({String status = 'Booked', int inDays = 4, double? delivered}) => CollectionBooking(
       id: 'bk-1',
       bookingNo: 'BK-2026-000001',
       status: status,
       centreName: 'Mihintale Collection Point',
-      slotDate: today.add(const Duration(days: 4)),
+      slotDate: today.add(Duration(days: inDays)),
       startTime: '07:00',
       endTime: '09:00',
       plotCode: 'A-01',
       cropName: 'Tomato',
       quantityKg: 400,
+      actualQuantityKg: delivered,
       distanceKm: 0.8,
     );
 
@@ -180,5 +181,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No collection slot has room'), findsOneWidget);
+  });
+
+  testWidgets('a booking whose day has passed cannot be cancelled and says so', (tester) async {
+    when(() => harvest.myBookings()).thenAnswer((_) async => [booking(inDays: -4)]);
+    await openHarvest(tester);
+
+    expect(find.text('Day passed'), findsOneWidget);
+    expect(find.text('Cancel'), findsNothing);
+  });
+
+  testWidgets('a completed delivery shows the weight the centre recorded', (tester) async {
+    when(() => harvest.myBookings()).thenAnswer((_) async => [booking(status: 'Completed', inDays: -1, delivered: 387.5)]);
+    await openHarvest(tester);
+
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Delivered 387.5 kg, weighed at the centre'), findsOneWidget);
+    expect(find.text('Cancel'), findsNothing);
   });
 }

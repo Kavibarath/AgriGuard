@@ -58,4 +58,20 @@ public sealed class CollectionController(ICollectionService collection) : Contro
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public Task<CollectionBookingDto> Cancel(Guid id, CancellationToken ct) => collection.CancelAsync(id, ct);
+
+    /// <summary>
+    /// Non-CRUD (§5.1): co-op staff record the day at the centre. Body names the target status:
+    /// CheckedIn (the farmer arrived), Completed with actualQuantityKg (weighed), or NoShow (missed).
+    /// Not before the collection day, never backwards; repeating a request is harmless.
+    /// 422 ILLEGAL_BOOKING_TRANSITION for any other move.
+    /// </summary>
+    [HttpPost("collection-bookings/{id:guid}/record")]
+    [Authorize(Policy = AuthPolicies.RecordsCollections)]
+    [ProducesResponseType<CollectionBookingDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public Task<CollectionBookingDto> Record(Guid id, RecordBookingRequest request, CancellationToken ct) =>
+        collection.RecordAsync(id, request, ct);
 }

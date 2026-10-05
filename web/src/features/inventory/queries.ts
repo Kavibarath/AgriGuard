@@ -53,6 +53,7 @@ export const useFulfilOrder = () =>
   useStockMutation(({ id, status, pickupCode }: { id: string; status: OrderStatus; pickupCode?: string }) =>
     inventory.fulfilOrder(id, status, pickupCode),
   )
+export const useRecordCashPayment = () => useStockMutation(inventory.recordCashPayment)
 
 function useRuleMutation<TArgs, TResult>(mutationFn: (args: TArgs) => Promise<TResult>) {
   const queryClient = useQueryClient()

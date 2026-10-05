@@ -3,8 +3,10 @@ using AgriGuard.Application.Common.Exceptions;
 using AgriGuard.Application.Common.Interfaces;
 using AgriGuard.Application.Common.Models;
 using AgriGuard.Application.Inventory;
+using AgriGuard.Application.Payments;
 using AgriGuard.Domain.Identity;
 using AgriGuard.Domain.Inventory;
+using AgriGuard.Infrastructure.Payments;
 using AgriGuard.Infrastructure.Persistence;
 using AgriGuard.Infrastructure.Registry;
 using Microsoft.EntityFrameworkCore;
@@ -16,11 +18,13 @@ namespace AgriGuard.Infrastructure.Inventory;
 /// The dealer's side of an approved prescription. The approval transaction creates the order
 /// Confirmed, with its stock already drawn; the dealer packs it and hands it over
 /// (<see cref="OrderStatusRules"/>). Handing over needs the farmer's pickup code
-/// (<see cref="PickupCodes"/>), which only the farmer sees, on the phone (<see cref="ListMineAsync"/>).
+/// (<see cref="PickupCodes"/>), which only the farmer sees, on the phone (<see cref="ListMineAsync"/>),
+/// and only once the order is paid (<see cref="PaymentRules.ExplainHandOver"/>).
 /// </summary>
 public sealed class OrderService(
     AgriGuardDbContext db,
     ICurrentUserAccessor currentUser,
+    IPaymentGateway paymentGateway,
     TimeProvider timeProvider,
     ILogger<OrderService> logger) : IOrderService
 {
@@ -88,6 +92,10 @@ public sealed class OrderService(
         if (OrderStatusRules.ExplainFulfilment(order.Status, request.Status) is { } refusal)
             throw new BusinessRuleException("ILLEGAL_ORDER_TRANSITION", refusal);
 
+        // Nothing leaves the shop unpaid: cash at the counter, or the farmer's card in the app.
+        if (request.Status == OrderStatus.Collected && PaymentRules.ExplainHandOver(order.PaymentStatus) is { } unpaid)
+            throw new BusinessRuleException("ORDER_NOT_PAID", unpaid);
+
         // The packs go to the farmer the prescription was written for: they show a code only they have.
         if (request.Status == OrderStatus.Collected && order.PickupCode is { } code)
         {
@@ -143,6 +151,13 @@ public sealed class OrderService(
                 o.Prescription != null ? o.Prescription.PrescriptionNo : null,
                 o.Prescription != null ? (DateOnly?)o.Prescription.SprayDate : null,
                 o.TotalAmount,
+                o.PaymentStatus,
+                o.PaidAt,
+                o.Payments.AsQueryable().Where(PaymentQueries.Settled).OrderBy(p => p.CompletedAt).Select(p => (PaymentMethod?)p.Method).FirstOrDefault(),
+                o.Payments.AsQueryable().Where(PaymentQueries.Settled).OrderBy(p => p.CompletedAt).Select(p => p.CardBrand).FirstOrDefault(),
+                o.Payments.AsQueryable().Where(PaymentQueries.Settled).OrderBy(p => p.CompletedAt).Select(p => p.CardLast4).FirstOrDefault(),
+                o.Payments.Where(p => p.Method == PaymentMethod.Card && p.Status == PaymentAttemptStatus.Pending).Select(p => (Guid?)p.Id).FirstOrDefault(),
+                false,
                 o.CreatedAt,
                 o.ConfirmedAt,
                 o.PackedAt,
@@ -155,7 +170,11 @@ public sealed class OrderService(
 
         // A used or void code is not worth showing: it can no longer hand anything over.
         return new PagedResult<FarmerOrderDto>(
-            [.. page.Items.Select(o => o.Status is OrderStatus.Collected or OrderStatus.Cancelled ? o with { PickupCode = null } : o)],
+            [.. page.Items.Select(o => o with
+            {
+                PickupCode = o.Status is OrderStatus.Collected or OrderStatus.Cancelled ? null : o.PickupCode,
+                CanPayByCard = paymentGateway.IsConfigured && PaymentRules.ExplainCannotPay(o.Status, o.PaymentStatus, o.TotalAmount) is null
+            })],
             page.Page, page.PageSize, page.TotalCount);
     }
 
@@ -174,6 +193,11 @@ public sealed class OrderService(
         o.Prescription != null ? o.Prescription.PrescriptionNo : null,
         o.Prescription != null ? (DateOnly?)o.Prescription.SprayDate : null,
         o.TotalAmount,
+        o.PaymentStatus,
+        o.PaidAt,
+        o.Payments.AsQueryable().Where(PaymentQueries.Settled).OrderBy(p => p.CompletedAt).Select(p => (PaymentMethod?)p.Method).FirstOrDefault(),
+        o.Payments.AsQueryable().Where(PaymentQueries.Settled).OrderBy(p => p.CompletedAt).Select(p => p.CardBrand).FirstOrDefault(),
+        o.Payments.AsQueryable().Where(PaymentQueries.Settled).OrderBy(p => p.CompletedAt).Select(p => p.CardLast4).FirstOrDefault(),
         o.CreatedAt,
         o.ConfirmedAt,
         o.PackedAt,

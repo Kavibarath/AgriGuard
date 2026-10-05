@@ -12,6 +12,7 @@ export const policies = {
   ManagesInventory: [Role.AgroDealer],
   ViewsStockReports: [Role.AgroDealer, Role.CoopAdministrator],
   AdministersRules: [Role.CoopAdministrator],
+  RecordsCollections: [Role.FieldAgronomist, Role.CoopAdministrator],
   OwnsFarm: [Role.Farmer, Role.FieldAgronomist, Role.CoopAdministrator],
 } as const satisfies Record<string, readonly Role[]>
 

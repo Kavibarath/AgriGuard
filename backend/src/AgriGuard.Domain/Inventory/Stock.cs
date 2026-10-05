@@ -120,9 +120,19 @@ public class InputOrder : AuditableEntity
     /// </summary>
     public string? PickupCode { get; set; }
 
+    /// <summary>
+    /// Paid once a payment has succeeded (<see cref="Payment"/>); the order is handed over only
+    /// then (<see cref="PaymentRules.ExplainHandOver"/>).
+    /// </summary>
+    public OrderPaymentStatus PaymentStatus { get; set; } = OrderPaymentStatus.Unpaid;
+
+    public DateTime? PaidAt { get; set; }
+
     public uint Version { get; set; }
 
     public ICollection<InputOrderLine> Lines { get; set; } = new List<InputOrderLine>();
+
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }
 
 public class InputOrderLine : Entity

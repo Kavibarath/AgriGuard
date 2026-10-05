@@ -46,7 +46,9 @@ describe('OrdersPage', () => {
   it('hands an order over only with the farmer’s pickup code', async () => {
     const bodies: unknown[] = []
     server.use(
-      http.get(`${API_BASE_URL}/api/orders`, () => HttpResponse.json(paged([makeOrder({ status: 'Packed', nextStatus: 'Collected' })]))),
+      http.get(`${API_BASE_URL}/api/orders`, () =>
+        HttpResponse.json(paged([makeOrder({ status: 'Packed', nextStatus: 'Collected', paymentStatus: 'Paid', paidBy: 'Cash' })])),
+      ),
       http.post(`${API_BASE_URL}/api/orders/:id/fulfil`, async ({ request }) => {
         const body = (await request.json()) as { pickupCode?: string }
         bodies.push(body)
@@ -79,6 +81,76 @@ describe('OrdersPage', () => {
       { status: 'Collected', pickupCode: '482914' },
       { status: 'Collected', pickupCode: '482913' },
     ])
+  })
+
+  it('shows whether each order is paid, and how', async () => {
+    server.use(
+      http.get(`${API_BASE_URL}/api/orders`, () =>
+        HttpResponse.json(
+          paged([
+            makeOrder(),
+            makeOrder({ id: 'order-2', orderNo: 'ORD-2026-000002', paymentStatus: 'Paid', paidBy: 'Card', cardBrand: 'visa', cardLast4: '4242' }),
+          ]),
+        ),
+      ),
+    )
+    renderApp('/orders')
+
+    const unpaid = await screen.findByRole('row', { name: /ORD-2026-000001/ })
+    expect(within(unpaid).getByText('Unpaid')).toBeInTheDocument()
+    expect(within(unpaid).getByRole('button', { name: 'Record cash: ORD-2026-000001' })).toBeInTheDocument()
+    const paid = screen.getByRole('row', { name: /ORD-2026-000002/ })
+    expect(within(paid).getByText('Paid')).toBeInTheDocument()
+    expect(within(paid).getByText('Card · Visa •••• 4242')).toBeInTheDocument()
+    expect(within(paid).queryByRole('button', { name: /Record cash/ })).not.toBeInTheDocument()
+  })
+
+  it('records cash taken at the counter after the dealer confirms the amount', async () => {
+    const paidFor: string[] = []
+    server.use(
+      http.post(`${API_BASE_URL}/api/orders/:id/payments/cash`, ({ params }) => {
+        paidFor.push(String(params.id))
+        return HttpResponse.json(makeOrder({ paymentStatus: 'Paid', paidBy: 'Cash' }))
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp('/orders')
+
+    await user.click(await screen.findByRole('button', { name: 'Record cash: ORD-2026-000001' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Record cash for ORD-2026-000001' })
+    await user.click(within(dialog).getByRole('button', { name: 'Cash received: LKR 4,800.00' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(paidFor).toEqual(['order-1'])
+  })
+
+  it('will not hand an unpaid order over until the cash is recorded', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.get(`${API_BASE_URL}/api/orders`, () => HttpResponse.json(paged([makeOrder({ status: 'Packed', nextStatus: 'Collected' })]))),
+      http.post(`${API_BASE_URL}/api/orders/:id/payments/cash`, () =>
+        HttpResponse.json(makeOrder({ status: 'Packed', nextStatus: 'Collected', paymentStatus: 'Paid', paidBy: 'Cash' })),
+      ),
+      http.post(`${API_BASE_URL}/api/orders/:id/fulfil`, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json(makeOrder({ status: 'Collected', nextStatus: null, paymentStatus: 'Paid', paidBy: 'Cash' }))
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp('/orders?view=Packed')
+
+    await user.click(await screen.findByRole('button', { name: 'Mark collected: ORD-2026-000001' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Hand over ORD-2026-000001' })
+    expect(within(dialog).getByText('Not paid yet')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Pickup code')).toBeDisabled()
+    expect(within(dialog).getByRole('button', { name: 'Hand over' })).toBeDisabled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cash received: LKR 4,800.00' }))
+    expect(await within(dialog).findByText(/Cash at the counter/)).toBeInTheDocument()
+    await user.type(within(dialog).getByLabelText('Pickup code'), '482913')
+    await user.click(within(dialog).getByRole('button', { name: 'Hand over' }))
+
+    await waitFor(() => expect(bodies).toEqual([{ status: 'Collected', pickupCode: '482913' }]))
   })
 
   it('offers no step for a collected order', async () => {

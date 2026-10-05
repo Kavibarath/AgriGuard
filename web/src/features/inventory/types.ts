@@ -5,6 +5,8 @@ export type Formulation = 'EC' | 'SC' | 'WP' | 'WG' | 'SL' | 'GR'
 export type ExpiryState = 'InDate' | 'ExpiringSoon' | 'Expired'
 export type ReservationStatus = 'Held' | 'Committed' | 'Released' | 'Expired'
 export type OrderStatus = 'Draft' | 'Confirmed' | 'Packed' | 'Collected' | 'Cancelled'
+export type OrderPaymentStatus = 'Unpaid' | 'Paid'
+export type PaymentMethod = 'Card' | 'Cash'
 
 export const unitLabels: Record<ProductUnit, string> = { Litre: 'L', Kilogram: 'kg' }
 
@@ -109,6 +111,13 @@ export interface Order {
   prescriptionNo: string | null
   sprayDate: string | null
   totalAmount: number
+  /** Paid by card in the farmer's app, or in cash recorded here. Only a paid order is handed over. */
+  paymentStatus: OrderPaymentStatus
+  paidAt: string | null
+  paidBy: PaymentMethod | null
+  /** The card's brand ("visa", "mastercard") and last four digits, for a card payment. */
+  cardBrand: string | null
+  cardLast4: string | null
   createdAt: string
   confirmedAt: string | null
   packedAt: string | null
