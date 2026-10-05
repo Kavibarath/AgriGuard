@@ -18,7 +18,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, status
 
 from .config import Settings, get_settings
 from .contracts import RunRequest
-from .llm import OllamaProvider, StructuredLlm
+from .llm import StructuredLlm, create_provider
 from .runner import execute_run
 
 log = structlog.get_logger(__name__)
@@ -31,7 +31,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with httpx.AsyncClient() as client:
         app.state.http = client
         app.state.settings = settings
-        app.state.llm = StructuredLlm(OllamaProvider(client, settings), settings)
+        app.state.provider = create_provider(client, settings)
+        app.state.llm = StructuredLlm(app.state.provider, settings)
         log.info("agent_service_started", provider=settings.llm_provider, model=settings.llm_model)
         yield
 
@@ -50,15 +51,16 @@ def _authorise(settings: Settings, provided: str | None) -> None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid agent key.")
 
 
+@app.get("/health/live")
+async def health_live() -> dict[str, str]:
+    """The process is up. Calls nothing, so the host's frequent probes never spend model quota."""
+    return {"status": "healthy"}
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
     settings: Settings = app.state.settings
-    reachable = False
-    try:
-        response = await app.state.http.get(f"{settings.ollama_base_url}/api/tags", timeout=3.0)
-        reachable = response.status_code == 200
-    except httpx.HTTPError:
-        reachable = False
+    reachable = await app.state.provider.is_reachable()
 
     # Degraded rather than unhealthy: the service is up and will fail runs safely if asked.
     return {

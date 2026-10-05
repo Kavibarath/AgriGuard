@@ -1,0 +1,6 @@
+# Build output, test projects and IDE state never enter the image.
+**/bin
+**/obj
+**/.vs
+**/*.user
+tests

@@ -1,0 +1,10 @@
+# Secrets and local tooling never enter the image.
+.env
+.env.*
+.venv
+**/__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+*.egg-info
+tests

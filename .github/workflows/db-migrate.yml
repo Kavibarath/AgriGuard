@@ -1,0 +1,50 @@
+# Applies the EF Core migrations and the demo seed to the deployed (Neon) database.
+# Manual only. This is the fallback for when the developer's network blocks PostgreSQL's port 5432;
+# the usual route is `dotnet tool run dotnet-ef database update` from the developer's own terminal
+# (docs/DEPLOYMENT.md). Both are idempotent: applied migrations and seeded rows are skipped.
+# Needs the repository secret NEON_CONNECTION_STRING (the Npgsql key=value form, SSL Mode=VerifyFull).
+name: db-migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      seed-demo-data:
+        description: Also seed the demo accounts and data (Seed:DemoUsers)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migrate the deployed database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore the repo-local dotnet-ef
+        run: dotnet tool restore
+
+      - name: Apply migrations (and the seed)
+        env:
+          # Production, so no user-secrets or Development settings are involved.
+          ASPNETCORE_ENVIRONMENT: Production
+          ConnectionStrings__Default: ${{ secrets.NEON_CONNECTION_STRING }}
+          Seed__DemoUsers: ${{ inputs.seed-demo-data }}
+        run: >
+          dotnet tool run dotnet-ef database update
+          --project backend/src/AgriGuard.Infrastructure
+          --startup-project backend/src/AgriGuard.Api
+          --configuration Release

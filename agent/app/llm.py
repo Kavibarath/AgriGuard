@@ -8,7 +8,9 @@ where there is no GPU) because the demo must not depend on a machine we do not c
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, TypeVar
 
 import httpx
@@ -29,8 +31,38 @@ class LlmError(RuntimeError):
 class LlmProvider(Protocol):
     async def complete(self, system: str, user: str) -> str: ...
 
+    async def is_reachable(self) -> bool: ...
+
     @property
     def model_name(self) -> str: ...
+
+
+OLLAMA = "ollama"
+OPENAI_COMPATIBLE = "openai-compatible"
+
+
+def create_provider(client: httpx.AsyncClient, settings: Settings) -> LlmProvider:
+    """
+    Picks the provider from AGENT_LLM_PROVIDER. A misconfigured provider stops start-up, because
+    a service that boots without a usable model would only fail later, mid-run, in front of a user.
+    """
+    if settings.llm_provider == OLLAMA:
+        return OllamaProvider(client, settings)
+    if settings.llm_provider == OPENAI_COMPATIBLE:
+        missing = [
+            name
+            for name, value in (
+                ("AGENT_LLM_BASE_URL", settings.llm_base_url),
+                ("AGENT_LLM_API_KEY", settings.llm_api_key),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"AGENT_LLM_PROVIDER={OPENAI_COMPATIBLE} needs {' and '.join(missing)}.")
+        return OpenAICompatibleProvider(client, settings)
+    raise ValueError(
+        f"Unknown AGENT_LLM_PROVIDER '{settings.llm_provider}'. Use '{OLLAMA}' or '{OPENAI_COMPATIBLE}'."
+    )
 
 
 class OllamaProvider:
@@ -77,6 +109,109 @@ class OllamaProvider:
             raise LlmError(f"Model returned {response.status_code}: {response.text[:200]}")
 
         return str(response.json().get("response", ""))
+
+    async def is_reachable(self) -> bool:
+        try:
+            response = await self._client.get(f"{self._settings.ollama_base_url}/api/tags", timeout=3.0)
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
+
+
+class OpenAICompatibleProvider:
+    """
+    Hosted inference over the OpenAI chat-completions API (Groq, Gemini's OpenAI endpoint, …),
+    used where the deployment has no GPU. `response_format: json_object` is the equivalent of
+    Ollama's `format="json"`: the model must emit one JSON object, so StructuredLlm's Pydantic
+    validation and repair loop work unchanged. JSON mode requires the word "JSON" in the
+    messages; StructuredLlm's instruction always contains it.
+
+    Free tiers rate-limit per minute. A 429 is waited out (honouring Retry-After) a bounded number
+    of times; after that the call fails like any other model error and the run ends safely.
+    """
+
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        settings: Settings,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
+        self._client = client
+        self._settings = settings
+        self._sleep = sleep
+
+    @property
+    def model_name(self) -> str:
+        return self._settings.llm_model
+
+    @property
+    def _base_url(self) -> str:
+        return self._settings.llm_base_url.rstrip("/")
+
+    @property
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._settings.llm_api_key}"}
+
+    async def complete(self, system: str, user: str) -> str:
+        payload = {
+            "model": self._settings.llm_model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": self._settings.llm_temperature,
+            "max_tokens": self._settings.llm_num_predict,
+        }
+
+        for attempt in range(self._settings.llm_rate_limit_retries + 1):
+            try:
+                response = await self._client.post(
+                    f"{self._base_url}/chat/completions",
+                    json=payload,
+                    headers=self._headers,
+                    timeout=self._settings.llm_timeout_seconds,
+                )
+            except httpx.HTTPError as error:
+                raise LlmError(f"The language model is unreachable: {error}") from error
+
+            if response.status_code == 429 and attempt < self._settings.llm_rate_limit_retries:
+                wait = _retry_after(response, attempt, self._settings.llm_max_retry_wait_seconds)
+                log.warning("llm_rate_limited", attempt=attempt + 1, wait_seconds=wait)
+                await self._sleep(wait)
+                continue
+            if response.status_code >= 400:
+                # The body never contains our key; providers echo only the error message.
+                raise LlmError(f"Model returned {response.status_code}: {response.text[:200]}")
+            return _message_content(response)
+
+        raise AssertionError("unreachable: the last attempt either returns or raises")
+
+    async def is_reachable(self) -> bool:
+        """Lists models: authenticated, but spends no tokens from the daily quota."""
+        try:
+            response = await self._client.get(f"{self._base_url}/models", headers=self._headers, timeout=5.0)
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
+
+
+def _retry_after(response: httpx.Response, attempt: int, cap: float) -> float:
+    """Seconds to wait after a 429: the provider's Retry-After when given, else 2, 4, 8 … capped."""
+    try:
+        wait = float(response.headers.get("retry-after", ""))
+    except ValueError:
+        wait = 2.0 ** (attempt + 1)
+    return max(0.0, min(wait, cap))
+
+
+def _message_content(response: httpx.Response) -> str:
+    """The first choice's text, or an LlmError for any body that is not a chat completion."""
+    try:
+        content = response.json()["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError) as error:
+        raise LlmError(f"The model returned an unexpected response: {response.text[:200]}") from error
+    return str(content or "")
 
 
 class StructuredLlm:
