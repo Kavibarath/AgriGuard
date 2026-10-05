@@ -300,7 +300,9 @@ their outgoing addresses with many other customers. On 6 Oct 2026 every forecast
 Render got `429 Too Many Requests`, so V8 (weather) was "not evaluated" and the spray-window panel
 said "forecast unavailable". `web/vercel.json` relays exactly one path, `/openmeteo/v1/forecast`,
 to `https://api.open-meteo.com/v1/forecast`, so Open-Meteo sees Vercel's address instead. Nothing
-else is relayed.
+else is relayed. If Open-Meteo still refuses (it did on 6 Oct, possibly because the relay passes the
+caller's address along), the API falls back to **MET Norway** (api.met.no) automatically. No
+setting is needed, and the forecast is still shown. See `docs/handover/weather-and-v8.md`.
 
 Check the weather: as any signed-in user, the dashboard's spray-window panel shows days, not
 "forecast unavailable". Or open `WEB_URL/openmeteo/v1/forecast?latitude=7&longitude=80.8&hourly=temperature_2m`

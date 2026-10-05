@@ -150,7 +150,7 @@ public static class DependencyInjection
 
         // Component D — Open-Meteo weather (§10), behind a cache and a resilience pipeline
         services.AddOptions<OpenMeteoOptions>().Bind(configuration.GetSection(OpenMeteoOptions.SectionName));
-        services.AddHttpClient<IWeatherProvider, OpenMeteoClient>((sp, http) =>
+        services.AddHttpClient<OpenMeteoClient>((sp, http) =>
             {
                 http.BaseAddress = sp.GetRequiredService<IOptions<OpenMeteoOptions>>().Value.BaseUrl;
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("AgriGuard/1.0 (SLIIT SE3090 academic project)");
@@ -176,6 +176,29 @@ public static class DependencyInjection
                 });
                 pipeline.AddTimeout(TimeSpan.FromSeconds(5));
             });
+        // The fallback when Open-Meteo refuses (it rate-limits shared cloud addresses such as
+        // Render's): MET Norway, which identifies callers by user agent rather than by address.
+        services.AddOptions<MetNorwayOptions>().Bind(configuration.GetSection(MetNorwayOptions.SectionName));
+        services.AddHttpClient<MetNorwayClient>((sp, http) =>
+            {
+                var met = sp.GetRequiredService<IOptions<MetNorwayOptions>>().Value;
+                http.BaseAddress = met.BaseUrl;
+                http.DefaultRequestHeaders.UserAgent.TryParseAdd(met.UserAgent);
+            })
+            .AddResilienceHandler("met-norway", pipeline =>
+            {
+                // Called only after Open-Meteo has already failed, so one retry and a slightly
+                // longer limit (its response is larger) rather than a second breaker.
+                pipeline.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = 1,
+                    BackoffType = DelayBackoffType.Exponential,
+                    UseJitter = true,
+                    Delay = TimeSpan.FromMilliseconds(300)
+                });
+                pipeline.AddTimeout(TimeSpan.FromSeconds(10));
+            });
+        services.AddTransient<IWeatherProvider, FallbackWeatherProvider>();
         services.AddScoped<IWeatherService, WeatherService>();
         services.AddScoped<ISprayWindowService, SprayWindowService>();
 

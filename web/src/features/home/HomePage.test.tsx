@@ -50,6 +50,7 @@ describe('HomePage', () => {
     const footer = screen.getByRole('contentinfo')
     for (const [name, href] of [
       [/Open-Meteo/, 'https://open-meteo.com/'],
+      [/MET Norway/, 'https://api.met.no/'],
       [/OpenStreetMap contributors/, 'https://www.openstreetmap.org/copyright'],
       [/Andi Farruku on Pexels/, 'https://www.pexels.com/video/green-plants-on-the-field-7983392/'],
     ] as const) {
