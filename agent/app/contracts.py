@@ -72,7 +72,9 @@ class Triage(StrictModel):
 # of them is dropped: the only chemical advice a farmer gets is a validated, approved prescription.
 _CHEMICAL_ADVICE = re.compile(
     r"(fungicide|insecticide|pesticide|herbicide|bactericide|miticide|acaricide|\bspray|"
-    r"\b\d+(\.\d+)?\s*(ml|l|g|kg|litres?|liters?|grams?)\b)",
+    r"\b\d+(\.\d+)?\s*(ml|l|g|kg|litres?|liters?|grams?)\b|"
+    # "Apply the approved product as directed": a product is only ever named in a prescription.
+    r"\b(apply|use|treat with)\b.{0,30}\b(product|chemical|treatment)s?\b|\bapproved product)",
     re.IGNORECASE,
 )
 

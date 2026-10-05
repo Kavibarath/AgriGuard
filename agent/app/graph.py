@@ -335,14 +335,54 @@ def build_graph(deps: GraphDependencies) -> Any:
             if windows.get(p["productId"], {}).get("canSprayToday", True)
         ]
 
+        # The three ways a treatment can be impossible right now are facts, not faults: each ends
+        # the run as a hand-off to an agronomist, who can wait for the right day, find stock or
+        # advise something else. None of them is "the system broke".
         if not options:
-            raise ToolError("No approved product can be sprayed on this plot today.")
+            return await no_treatment(
+                state,
+                "No approved product can be sprayed on this plot today: each is blocked by the "
+                "pre-harvest interval, the season's limit or the gap since the last spray.",
+            )
 
         # The same forecast judgement as rule V8: proposing any other day only earns a revision.
         weather = state.get("weather") or {}
         spray_days = [d["date"] for d in weather.get("days", []) if d.get("suitable")]
         if weather.get("forecastAvailable") and not spray_days:
-            raise ToolError(f"No day in the forecast suits spraying. {weather.get('summary', '')}".strip())
+            return await no_treatment(
+                state, f"No day in the forecast suits spraying. {weather.get('summary', '')}".strip()
+            )
+
+        # The same stock judgement as rule V9: the best-stocked single dealer in the farm's district
+        # must hold enough for at least the lowest label dose over the whole plot. Without this the
+        # model picks a product nobody has, and every revision fails V9 the same way.
+        area = float(case["areaHectares"])
+        stocked: list[dict[str, Any]] = []
+        for option in options:
+            # Stock must still be in date on the day it would be sprayed.
+            when = {"usableOn": spray_days[0]} if spray_days else {}
+            stock = await tools.call(
+                "check_stock_availability",
+                productId=option["product_id"],
+                districtId=case["districtId"],
+                **when,
+            )
+            dealers = stock.get("dealers") or []
+            best = max(dealers, key=lambda d: d.get("availableQuantity", 0), default=None)
+            available = float(best["availableQuantity"] if best else stock.get("availableQuantity", 0))
+            if available >= float(option["min_dose_per_hectare"]) * area:
+                dealer_id = best["dealerId"] if best else None
+                stocked.append({**option, "in_stock": available, "dealer_id": dealer_id})
+
+        if not stocked:
+            names = ", ".join(o["name"] for o in options)
+            return await no_treatment(
+                state,
+                f"No dealer in the district has enough of the approved products in stock ({names}). "
+                "An agronomist can source it or advise another way.",
+            )
+        options = stocked
+
         weather_line = (
             f"Days whose weather suits spraying (spray_date must be one of these): {', '.join(spray_days)}\n"
             if spray_days
@@ -369,8 +409,16 @@ def build_graph(deps: GraphDependencies) -> Any:
             f"Today: {safety.get('today') or datetime.now(UTC).date().isoformat()}. "
             f"Planned harvest: {safety.get('harvestDate')}\n"
             f"{weather_line}"
-            f"Approved products:\n{options}\n{guidance}",
+            "Each product's in_stock is the most one dealer holds: total_quantity must not exceed it.\n"
+            f"Approved products in stock:\n{options}\n{guidance}",
         )
+
+        # The dealer the stock was found at, unless the model named one itself: the validator then
+        # checks V9 against that same shop.
+        if proposal.dealer_id is None:
+            chosen = next((o for o in options if o["product_id"] == proposal.product_id), None)
+            if chosen is not None and chosen.get("dealer_id"):
+                proposal = proposal.model_copy(update={"dealer_id": chosen["dealer_id"]})
 
         await deps.emit(
             "StepCompleted",
@@ -381,6 +429,17 @@ def build_graph(deps: GraphDependencies) -> Any:
             },
         )
         return {**state, "proposal": proposal, "safety_profile": safety}
+
+    async def no_treatment(state: RunState, reason: str) -> RunState:
+        """Ends the run as a hand-off to an agronomist, with the reason the farmer and the agronomist see."""
+        await deps.emit(
+            "StepCompleted",
+            {"agentRole": AgentRole.ACTION.value, "sequenceNo": 4, "payload": {"noTreatment": reason}},
+        )
+        return {**state, "outcome": RunOutcome.MANUAL_REVIEW, "failure_reason": reason}
+
+    def route_after_action(state: RunState) -> str:
+        return "unavailable" if state.get("outcome") == RunOutcome.MANUAL_REVIEW else "validate"
 
     async def validation(state: RunState) -> RunState:
         await step(AgentRole.VALIDATION, 5, "Check the proposal against the safety rules")
@@ -524,7 +583,7 @@ def build_graph(deps: GraphDependencies) -> Any:
     graph.add_edge("diagnosis", "triage")
     graph.add_conditional_edges("triage", route_after_triage, {"treat": "action", "agronomist": "escalated"})
     graph.add_edge("escalated", END)
-    graph.add_edge("action", "validation")
+    graph.add_conditional_edges("action", route_after_action, {"validate": "validation", "unavailable": END})
     graph.add_conditional_edges(
         "validation",
         route_after_validation,

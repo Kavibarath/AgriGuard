@@ -240,7 +240,7 @@ class TestSafeFailure:
         with pytest.raises(ToolError):
             await graph.ainvoke({"run_id": "r", "case_id": "c", "objective": "o", "revisions": 0})
 
-    async def test_no_approved_product_is_a_safe_failure_not_a_guess(
+    async def test_no_sprayable_product_hands_the_case_to_an_agronomist_instead_of_guessing(
         self, llm: StubLlm, settings: Settings
     ) -> None:
         # Every product blocked by the safety rules: the agent must not invent an alternative.
@@ -263,8 +263,11 @@ class TestSafeFailure:
             tools.factory(settings),
         )
 
-        assert result.outcome == RunOutcome.FAILED
-        assert "No approved product" in result.failure_reason
+        # Not a failure of the system: a fact a person must work around (wait, or another way).
+        assert result.outcome == RunOutcome.MANUAL_REVIEW
+        assert "No approved product can be sprayed" in (result.failure_reason or "")
+        assert result.proposal is None
+        assert not any(schema == "PrescriptionProposal" for schema, _ in llm.prompts)
 
     async def test_the_action_agent_proposes_from_the_farm_s_date_not_its_own_clock(
         self, llm: StubLlm, settings: Settings
@@ -304,7 +307,7 @@ class TestSafeFailure:
         assert "spray_date must be one of these): 2026-09-29" in action_prompt
         assert "2026-09-30" not in action_prompt.split("one of these):")[1].splitlines()[0]
 
-    async def test_no_day_that_suits_spraying_is_a_safe_failure_not_a_guess(
+    async def test_no_day_that_suits_spraying_hands_the_case_to_an_agronomist(
         self, llm: StubLlm, settings: Settings
     ) -> None:
         rainy = {
@@ -321,7 +324,7 @@ class TestSafeFailure:
             StubTools({"get_weather_forecast": rainy}).factory(settings),
         )
 
-        assert result.outcome == RunOutcome.FAILED
+        assert result.outcome == RunOutcome.MANUAL_REVIEW
         assert "No day in the forecast suits spraying" in (result.failure_reason or "")
 
     async def test_an_unreachable_forecast_does_not_stop_the_run(
@@ -389,3 +392,81 @@ class TestReviewerNote:
 
         assert "contact fungicide" in seen["prompt"]
         assert "<reviewer_note>" in seen["prompt"]
+
+
+class TestStock:
+    """The Action agent only offers what a dealer in the farm's district can actually supply (rule V9)."""
+
+    async def test_a_product_no_dealer_has_is_never_proposed_and_the_case_goes_to_a_person(
+        self, llm: StubLlm, settings: Settings
+    ) -> None:
+        empty = {"productId": "product-mancozeb", "availableQuantity": 0, "unit": "Kilogram", "dealers": []}
+        reporter = RecordingReporter()
+
+        result = await execute_run(
+            RunRequest(run_id="run-1", case_id="case-1", objective="o"),
+            llm,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            settings,
+            reporter,  # type: ignore[arg-type]
+            StubTools({"check_stock_availability": empty}).factory(settings),
+        )
+
+        assert result.outcome == RunOutcome.MANUAL_REVIEW
+        assert "No dealer in the district has enough" in (result.failure_reason or "")
+        assert "Mancozeb 80 WP" in (result.failure_reason or "")
+        # Nothing was proposed, so nothing was validated: no revise loop against an empty shelf.
+        assert not any(schema == "PrescriptionProposal" for schema, _ in llm.prompts)
+        assert "ValidationResult" not in reporter.types()
+
+    async def test_too_little_for_the_lowest_dose_over_the_plot_counts_as_none(
+        self, llm: StubLlm, settings: Settings
+    ) -> None:
+        # 0.8 ha at the lowest dose of 1.5 kg/ha needs 1.2 kg; one dealer holding 1.0 kg is not enough.
+        short = {
+            "productId": "product-mancozeb",
+            "availableQuantity": 1.0,
+            "unit": "Kilogram",
+            "dealers": [{"dealerId": "dealer-1", "shopName": "Shop", "availableQuantity": 1.0}],
+        }
+        state, _ = await run(llm, StubTools({"check_stock_availability": short}), settings)
+
+        assert state["outcome"] == RunOutcome.MANUAL_REVIEW
+
+    async def test_the_proposal_names_the_dealer_the_stock_was_found_at(
+        self, llm: StubLlm, settings: Settings
+    ) -> None:
+        tools = StubTools(
+            {
+                "check_stock_availability": {
+                    "productId": "product-mancozeb",
+                    "availableQuantity": 15.0,
+                    "unit": "Kilogram",
+                    "dealers": [
+                        {"dealerId": "dealer-big", "shopName": "Big", "availableQuantity": 12.0},
+                        {"dealerId": "dealer-small", "shopName": "Small", "availableQuantity": 3.0},
+                    ],
+                }
+            }
+        )
+
+        state, _ = await run(llm, tools, settings)
+
+        assert state["outcome"] == RunOutcome.PENDING_APPROVAL
+        assert state["proposal"].dealer_id == "dealer-big"
+        action_prompt = next(user for schema, user in llm.prompts if schema == "PrescriptionProposal")
+        assert "'in_stock': 12.0" in action_prompt
+        # Stock is looked up in the farm's own district.
+        assert ("Action", "check_stock_availability") in tools.calls
+
+
+class TestFarmerAdvice:
+    def test_advice_that_tells_the_farmer_to_apply_a_product_is_dropped(self) -> None:
+        from app.contracts import is_safe_advice
+
+        assert not is_safe_advice("Apply the approved product as directed")
+        assert not is_safe_advice("Use a chemical treatment if it spreads")
+        assert not is_safe_advice("Spray copper on the leaves")
+        assert is_safe_advice("Remove and burn infected plants")
+        assert is_safe_advice("Ensure proper irrigation and spacing to reduce stress")
+        assert is_safe_advice("Use clean tools between plants")
