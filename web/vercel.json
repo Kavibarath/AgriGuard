@@ -3,5 +3,8 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/openmeteo/v1/forecast", "destination": "https://api.open-meteo.com/v1/forecast" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

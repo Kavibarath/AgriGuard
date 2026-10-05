@@ -254,6 +254,7 @@ If the API's deploy fails, open **Logs**. A startup refusal names the setting. F
 | `ForwardedHeaders__Enabled` | no | `true`: trust Render's `X-Forwarded-Proto`/`-For` (last hop only) |
 | `Swagger__Enabled` | no | `true` |
 | `Calendar__TimeZone` | no | `Asia/Colombo` |
+| `OpenMeteo__BaseUrl` | no | `WEB_URL/openmeteo/` (the Vercel relay; unset calls Open-Meteo directly) |
 | `Seed__DemoUsers` | no | `true` (used only by `dotnet ef database update`) |
 | `PORT` | set by Render | the container binds to it (`ASPNETCORE_HTTP_PORTS`) |
 
@@ -287,10 +288,23 @@ If the API's deploy fails, open **Logs**. A startup refusal names the setting. F
 `web/vercel.json` rewrites every path to `index.html`, so a refresh on `/cases/…` or `/agent-runs/…`
 works.
 
-### 4.1 Allow the web console to call the API
+### 4.1 Allow the web console to call the API, and route the weather through Vercel
 
-Render → **agriguard-api → Environment**: set `Cors__AllowedOrigins__0` = `WEB_URL` (exactly,
-`https://`, no slash), then save and deploy.
+Render → **agriguard-api → Environment**, then save and deploy:
+
+- `Cors__AllowedOrigins__0` = `WEB_URL` (exactly, `https://`, no slash)
+- `OpenMeteo__BaseUrl` = `WEB_URL/openmeteo/` (**with** the slash at the end)
+
+Why the second one: Open-Meteo's free API limits each IP address, and Render's free services share
+their outgoing addresses with many other customers. On 6 Oct 2026 every forecast request from
+Render got `429 Too Many Requests`, so V8 (weather) was "not evaluated" and the spray-window panel
+said "forecast unavailable". `web/vercel.json` relays exactly one path, `/openmeteo/v1/forecast`,
+to `https://api.open-meteo.com/v1/forecast`, so Open-Meteo sees Vercel's address instead. Nothing
+else is relayed.
+
+Check the weather: as any signed-in user, the dashboard's spray-window panel shows days, not
+"forecast unavailable". Or open `WEB_URL/openmeteo/v1/forecast?latitude=7&longitude=80.8&hourly=temperature_2m`
+in a browser: it returns JSON.
 
 Check: open `WEB_URL`, choose **Sign in**, and sign in as `admin@agriguard.demo`. The dashboard loads
 with data. A CORS error in the browser console means the origin doesn't match exactly.
