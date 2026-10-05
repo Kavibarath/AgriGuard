@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router'
 import { FilterBar } from '@/components/layout/FilterBar'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Basket, Truck, XCircle } from '@/components/icons'
+import { Alert } from '@/components/ui/alert'
 import { AsyncBoundary } from '@/components/ui/AsyncBoundary'
 import { Button } from '@/components/ui/button'
 import { DataTable, Pagination, type Column } from '@/components/ui/DataTable'
@@ -15,12 +16,14 @@ import { useCurrentUser } from '@/features/auth/auth-store'
 import { can } from '@/features/auth/policies'
 import { isoToday } from '@/features/inventory/format'
 import { useDistricts } from '@/features/registry/queries'
+import { userMessage } from '@/lib/api'
 import { addDays, weekdayDay } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { formatKg } from './format'
-import { useBookings, useCentres, useSlots } from './queries'
+import { BookingRecordModal, type BookingStep } from './BookingRecordModal'
+import { useBookings, useCentres, useRecordBooking, useSlots } from './queries'
 import { SlotFormModal } from './SlotFormModal'
-import type { CollectionBooking, CollectionSlot } from './types'
+import { bookingStatusLabels, type CollectionBooking, type CollectionSlot } from './types'
 
 const DAYS = 7
 /** The API's page cap. A week of every centre fits (4 centres × 7 days × 3 slots = 84). */
@@ -81,7 +84,9 @@ function WeekTiles({ slots }: { slots: CollectionSlot[] | undefined }) {
 /**
  * The collection planner (§7 /collection-planner, Component D): each centre's slots for a week,
  * with what is booked and what is left, and the bookings behind them. The co-op administrator
- * opens extra slots here. District, centre and week live in the URL.
+ * opens extra slots here. Co-op staff (administrator, field agronomists) also record each
+ * booking's day at the centre: check in, weigh and complete, or mark missed. Nothing can be
+ * recorded before the collection day. District, centre and week live in the URL.
  */
 export function CollectionPlannerPage() {
   const user = useCurrentUser()
@@ -100,6 +105,23 @@ export function CollectionPlannerPage() {
   const bookingsQuery = { from: week, centreId, page: Number(params.get('page') ?? 1), pageSize: 10 }
   const bookings = useBookings(bookingsQuery)
   const canOpenSlots = can(user?.role, 'AdministersRules')
+  const canRecord = can(user?.role, 'RecordsCollections')
+  const checkIn = useRecordBooking()
+  const [checkingIn, setCheckingIn] = useState<string | null>(null)
+  const [recording, setRecording] = useState<{ booking: CollectionBooking; step: BookingStep } | null>(null)
+  const today = isoToday()
+
+  const doCheckIn = async (booking: CollectionBooking) => {
+    checkIn.reset()
+    setCheckingIn(booking.id)
+    try {
+      await checkIn.mutateAsync({ id: booking.id, status: 'CheckedIn' })
+    } catch {
+      // Shown above the bookings.
+    } finally {
+      setCheckingIn(null)
+    }
+  }
 
   const updateParams = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(params)
@@ -141,8 +163,27 @@ export function CollectionPlannerPage() {
         </div>
       ),
     },
-    { key: 'quantityKg', header: 'Quantity', numeric: true, render: (b) => formatKg(b.quantityKg) },
-    { key: 'status', header: 'Status', render: (b) => <StatusBadge label={b.status} tone={bookingStatusTone[b.status]} /> },
+    {
+      key: 'quantityKg',
+      header: 'Quantity',
+      numeric: true,
+      render: (b) => (
+        <div>
+          <p>{formatKg(b.quantityKg)}</p>
+          {b.actualQuantityKg !== null && <p className="text-xs text-stone-600">{formatKg(b.actualQuantityKg)} delivered</p>}
+        </div>
+      ),
+    },
+    { key: 'status', header: 'Status', render: (b) => <StatusBadge label={bookingStatusLabels[b.status]} tone={bookingStatusTone[b.status]} /> },
+    ...(canRecord
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            render: (b: CollectionBooking) => <BookingActions booking={b} today={today} busy={checkingIn === b.id} onCheckIn={doCheckIn} onRecord={setRecording} />,
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -266,6 +307,7 @@ export function CollectionPlannerPage() {
         <h2 id="bookings-heading" className="font-display text-xl font-semibold text-stone-900">
           Bookings from {weekdayDay(week)}
         </h2>
+        {checkIn.error && <Alert tone="error">{userMessage(checkIn.error)}</Alert>}
         <AsyncBoundary isPending={bookings.isPending} error={bookings.error} onRetry={bookings.refetch} label="Loading bookings">
           {bookings.data?.items.length === 0 ? (
             <EmptyState title="No bookings yet" description="Farmers book a slot from the harvest screen of the phone app." />
@@ -283,6 +325,15 @@ export function CollectionPlannerPage() {
         </AsyncBoundary>
       </section>
 
+      {canRecord && (
+        <BookingRecordModal
+          key={recording ? `${recording.booking.id}-${recording.step}` : 'none'}
+          booking={recording?.booking ?? null}
+          step={recording?.step ?? 'weigh'}
+          onClose={() => setRecording(null)}
+        />
+      )}
+
       {canOpenSlots && (
         <SlotFormModal
           open={opening}
@@ -291,6 +342,45 @@ export function CollectionPlannerPage() {
           defaults={{ centreId, slotDate: week < isoToday() ? isoToday() : week }}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * What staff can do with one booking now: check the farmer in on the day (or later), then record
+ * the weight; or mark a farmer who never came as missed. Before the day there is nothing to do.
+ */
+function BookingActions({
+  booking: b,
+  today,
+  busy,
+  onCheckIn,
+  onRecord,
+}: {
+  booking: CollectionBooking
+  today: string
+  busy: boolean
+  onCheckIn: (booking: CollectionBooking) => void
+  onRecord: (recording: { booking: CollectionBooking; step: BookingStep }) => void
+}) {
+  if (b.status === 'CheckedIn')
+    return (
+      <div className="flex justify-end">
+        <Button className="h-8" onClick={() => onRecord({ booking: b, step: 'weigh' })} aria-label={`Record weight: ${b.bookingNo}`}>
+          Record weight
+        </Button>
+      </div>
+    )
+  if (b.status !== 'Booked') return null
+  if (b.slotDate > today) return <p className="text-right text-xs whitespace-nowrap text-stone-500">On the day</p>
+  return (
+    <div className="flex justify-end gap-1.5">
+      <Button variant="secondary" className="h-8" loading={busy} onClick={() => onCheckIn(b)} aria-label={`Check in: ${b.bookingNo}`}>
+        Check in
+      </Button>
+      <Button variant="ghost" className="h-8 px-2" onClick={() => onRecord({ booking: b, step: 'missed' })} aria-label={`Mark missed: ${b.bookingNo}`}>
+        Missed
+      </Button>
     </div>
   )
 }

@@ -2,8 +2,8 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { API_BASE_URL } from '@/lib/api'
 import { useAuthStore } from '@/features/auth/auth-store'
-import { agronomist, authResponse, http, HttpResponse, problem, server } from '@/test/msw'
-import { makeSlot } from '@/test/harvest-handlers'
+import { agronomist, authResponse, farmer, http, HttpResponse, problem, server } from '@/test/msw'
+import { makeBooking, makeSlot } from '@/test/harvest-handlers'
 import { admin } from '@/test/inventory-handlers'
 import { paged } from '@/test/registry-handlers'
 import { renderApp } from '@/test/render'
@@ -103,5 +103,100 @@ describe('CollectionPlannerPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Open slot' }))
 
     expect(await within(dialog).findByText(/handles 3000 kg a day/)).toBeInTheDocument()
+  })
+
+  describe('at the centre', () => {
+    const recorded: unknown[] = []
+    beforeEach(() => {
+      recorded.length = 0
+      server.use(
+        http.post(`${API_BASE_URL}/api/collection-bookings/:id/record`, async ({ request }) => {
+          const body = (await request.json()) as { status: string; actualQuantityKg?: number }
+          recorded.push(body)
+          return HttpResponse.json(makeBooking({ status: body.status as never, actualQuantityKg: body.actualQuantityKg ?? null }))
+        }),
+      )
+    })
+
+    it('checks a farmer in on the day', async () => {
+      const user = userEvent.setup()
+      renderApp(WEEK)
+
+      await user.click(await screen.findByRole('button', { name: 'Check in: BK-2026-000001' }))
+
+      await waitFor(() => expect(recorded).toEqual([{ status: 'CheckedIn' }]))
+    })
+
+    it('records the weight delivered to complete a checked-in booking', async () => {
+      server.use(http.get(`${API_BASE_URL}/api/collection-bookings`, () => HttpResponse.json(paged([makeBooking({ status: 'CheckedIn' })]))))
+      const user = userEvent.setup()
+      renderApp(WEEK)
+
+      const row = await screen.findByRole('row', { name: /BK-2026-000001/ })
+      expect(within(row).getByText('Checked in')).toBeInTheDocument()
+      await user.click(within(row).getByRole('button', { name: 'Record weight: BK-2026-000001' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Record the weight for BK-2026-000001' })
+      await user.click(within(dialog).getByRole('button', { name: 'Complete delivery' }))
+      expect(within(dialog).getByText('Enter the weight delivered, in kg.')).toBeInTheDocument()
+
+      await user.type(within(dialog).getByLabelText('Weight delivered (kg)'), '387.5')
+      await user.click(within(dialog).getByRole('button', { name: 'Complete delivery' }))
+
+      await waitFor(() => expect(recorded).toEqual([{ status: 'Completed', actualQuantityKg: 387.5 }]))
+    })
+
+    it('marks a farmer who never came as missed, after asking', async () => {
+      const user = userEvent.setup()
+      renderApp(WEEK)
+
+      await user.click(await screen.findByRole('button', { name: 'Mark missed: BK-2026-000001' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Mark BK-2026-000001 missed' })
+      await user.click(within(dialog).getByRole('button', { name: 'Mark missed' }))
+
+      await waitFor(() => expect(recorded).toEqual([{ status: 'NoShow' }]))
+    })
+
+    it('offers nothing before the collection day, and shows a delivered weight and a missed booking plainly', async () => {
+      server.use(
+        http.get(`${API_BASE_URL}/api/collection-bookings`, () =>
+          HttpResponse.json(
+            paged([
+              makeBooking({ id: 'bk-f', bookingNo: 'BK-2026-000010', slotDate: '2099-01-05' }),
+              makeBooking({ id: 'bk-c', bookingNo: 'BK-2026-000011', status: 'Completed', actualQuantityKg: 380 }),
+              makeBooking({ id: 'bk-m', bookingNo: 'BK-2026-000012', status: 'NoShow' }),
+            ]),
+          ),
+        ),
+      )
+      renderApp(WEEK)
+
+      const future = await screen.findByRole('row', { name: /BK-2026-000010/ })
+      expect(within(future).queryByRole('button')).not.toBeInTheDocument()
+      expect(within(future).getByText('On the day')).toBeInTheDocument()
+      expect(within(screen.getByRole('row', { name: /BK-2026-000011/ })).getByText('380 kg delivered')).toBeInTheDocument()
+      expect(within(screen.getByRole('row', { name: /BK-2026-000012/ })).getByText('Missed')).toBeInTheDocument()
+    })
+
+    it('shows why a step was refused', async () => {
+      server.use(
+        http.post(`${API_BASE_URL}/api/collection-bookings/:id/record`, () =>
+          problem(422, 'Business rule violated', 'The farmer cancelled this booking.', { code: 'ILLEGAL_BOOKING_TRANSITION' }),
+        ),
+      )
+      const user = userEvent.setup()
+      renderApp(WEEK)
+
+      await user.click(await screen.findByRole('button', { name: 'Check in: BK-2026-000001' }))
+
+      expect(await screen.findByText('The farmer cancelled this booking.')).toBeInTheDocument()
+    })
+
+    it('gives farmers no centre actions', async () => {
+      useAuthStore.getState().setSession(authResponse(farmer))
+      renderApp(WEEK)
+
+      const row = await screen.findByRole('row', { name: /BK-2026-000001/ })
+      expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+    })
   })
 })

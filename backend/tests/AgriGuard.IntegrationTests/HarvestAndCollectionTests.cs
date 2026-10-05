@@ -281,6 +281,114 @@ public sealed class HarvestAndCollectionTests(AgriGuardApiFactory factory)
         Assert.True(booking.GetProperty("distanceKm").GetDouble() < 5);
     }
 
+    // ── At the centre: check-in, weight, missed ─────────────────────────────
+
+    /// <summary>A booking on <paramref name="day"/> at a fresh centre in the farm's district, with co-op staff signed in.</summary>
+    private async Task<(Guid BookingId, HttpClient Staff, HttpClient Farmer, CaseFixtures.FarmSetup Setup)> BookingOnAsync(DateOnly day)
+    {
+        var (setup, farmer) = await CropAsync();
+        var centre = await CentreAsync(setup.DistrictId, [(day, 1000m)]);
+        var response = await AllocateAsync(farmer, setup.Cycle.Id, 400m, day, centre.Id);
+        response.EnsureSuccessStatusCode();
+        var id = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var staff = await factory.SignedInAsAsync(await factory.CreateUserAsync(UserRole.FieldAgronomist, districtId: setup.DistrictId));
+        return (id, staff, farmer, setup);
+    }
+
+    private static Task<HttpResponseMessage> RecordAsync(HttpClient client, Guid bookingId, string status, decimal? kg = null) =>
+        client.PostAsJsonAsync($"/api/collection-bookings/{bookingId}/record", new { status, actualQuantityKg = kg });
+
+    [Fact]
+    public async Task On_the_day_staff_check_the_farmer_in_then_record_the_weight_delivered()
+    {
+        var (id, staff, farmer, _) = await BookingOnAsync(Today);
+
+        var checkIn = await RecordAsync(staff, id, "CheckedIn");
+        var repeat = await RecordAsync(staff, id, "CheckedIn");
+        var weighed = await RecordAsync(staff, id, "Completed", 387.5m);
+
+        Assert.Equal("CheckedIn", (await checkIn.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.OK, repeat.StatusCode);
+        var done = await weighed.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Completed", done.GetProperty("status").GetString());
+        Assert.Equal(387.5m, done.GetProperty("actualQuantityKg").GetDecimal());
+
+        // The farmer sees it on their own list.
+        var mine = (await farmer.GetFromJsonAsync<JsonElement>("/api/collection-bookings")).Items().Single(b => b.GetProperty("id").GetGuid() == id);
+        Assert.Equal("Completed", mine.GetProperty("status").GetString());
+        Assert.Equal(387.5m, mine.GetProperty("actualQuantityKg").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Nothing_is_recorded_before_the_day_and_steps_cannot_be_skipped()
+    {
+        var (future, staff, _, _) = await BookingOnAsync(FreshDay());
+        var (today, _, _, _) = await BookingOnAsync(Today);
+
+        var early = await RecordAsync(staff, future, "CheckedIn");
+        var skip = await RecordAsync(staff, today, "Completed", 400m);
+
+        Assert.Equal("ILLEGAL_BOOKING_TRANSITION", await early.ProblemCodeAsync());
+        Assert.Equal("ILLEGAL_BOOKING_TRANSITION", await skip.ProblemCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_booking_whose_day_passed_can_be_marked_missed_and_then_nothing_else()
+    {
+        var (id, staff, _, _) = await BookingOnAsync(Today);
+        // The collection day was yesterday.
+        await factory.QueryAsync(db => db.CollectionSlots.Where(s => s.Bookings.Any(b => b.Id == id))
+            .ExecuteUpdateAsync(u => u.SetProperty(s => s.SlotDate, Today.AddDays(-1))));
+
+        var missed = await RecordAsync(staff, id, "NoShow");
+        var lateCheckIn = await RecordAsync(staff, id, "CheckedIn");
+
+        Assert.Equal("NoShow", (await missed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+        Assert.Equal("ILLEGAL_BOOKING_TRANSITION", await lateCheckIn.ProblemCodeAsync());
+    }
+
+    [Fact]
+    public async Task A_weight_is_required_to_complete_and_refused_on_any_other_step()
+    {
+        var (id, staff, _, _) = await BookingOnAsync(Today);
+        await RecordAsync(staff, id, "CheckedIn");
+
+        var noWeight = await RecordAsync(staff, id, "Completed");
+        var weightOnCheckIn = await RecordAsync(staff, id, "NoShow", 10m);
+        var cancelledStatus = await RecordAsync(staff, id, "Cancelled");
+
+        Assert.Equal(HttpStatusCode.BadRequest, noWeight.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, weightOnCheckIn.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, cancelledStatus.StatusCode);
+    }
+
+    [Fact]
+    public async Task Only_co_op_staff_record_and_an_agronomist_only_in_their_district()
+    {
+        var (id, _, farmer, setup) = await BookingOnAsync(Today);
+        var (_, otherDistrict) = await factory.TwoDistrictsAsync();
+        var outsider = await factory.SignedInAsAsync(await factory.CreateUserAsync(UserRole.FieldAgronomist,
+            districtId: otherDistrict == setup.DistrictId ? (await factory.TwoDistrictsAsync()).First : otherDistrict));
+        var dealer = await factory.SignedInAsAsync(UserRole.AgroDealer);
+        var admin = await factory.SignedInAsAsync(UserRole.CoopAdministrator);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await RecordAsync(farmer, id, "CheckedIn")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await RecordAsync(dealer, id, "CheckedIn")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await RecordAsync(outsider, id, "CheckedIn")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await RecordAsync(admin, id, "CheckedIn")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_cancelled_booking_cannot_be_checked_in()
+    {
+        var (id, staff, farmer, _) = await BookingOnAsync(Today);
+        (await farmer.PostAsync($"/api/collection-bookings/{id}/cancel", null)).EnsureSuccessStatusCode();
+
+        var response = await RecordAsync(staff, id, "CheckedIn");
+
+        Assert.Equal("ILLEGAL_BOOKING_TRANSITION", await response.ProblemCodeAsync());
+    }
+
     // ── Slots ────────────────────────────────────────────────────────────────
 
     [Fact]

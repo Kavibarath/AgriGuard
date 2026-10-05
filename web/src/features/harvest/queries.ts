@@ -45,3 +45,7 @@ export const useRecordActual = () =>
   useHarvestMutation(({ id, actualYieldKg }: { id: string; actualYieldKg: number }) => harvest.recordActualYield(id, actualYieldKg))
 
 export const useCreateSlot = () => useHarvestMutation(harvest.createSlot)
+export const useRecordBooking = () =>
+  useHarvestMutation(({ id, status, actualQuantityKg }: { id: string; status: 'CheckedIn' | 'Completed' | 'NoShow'; actualQuantityKg?: number }) =>
+    harvest.recordBooking(id, status, actualQuantityKg),
+  )

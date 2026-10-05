@@ -250,6 +250,48 @@ public sealed class CollectionService(
         return await GetAsync(id, ct);
     }
 
+    /// <summary>
+    /// Non-CRUD: co-op staff record the booking's day at the centre — check in, weigh and complete,
+    /// or mark missed (<see cref="BookingStatusRules"/>). The request names the target status, so a
+    /// repeated click changes nothing. Staff see only bookings in their scope (an agronomist, their
+    /// district); a booking outside it is 403, as everywhere else.
+    /// </summary>
+    public async Task<CollectionBookingDto> RecordAsync(Guid id, RecordBookingRequest request, CancellationToken ct = default)
+    {
+        if (currentUser.Role is not (UserRole.FieldAgronomist or UserRole.CoopAdministrator))
+            throw new ForbiddenAccessException("Only co-op staff at the collection centre record check-ins and weights.");
+
+        var visible = await db.CollectionBookings.AsNoTracking().ScopedTo(currentUser).AnyAsync(b => b.Id == id, ct);
+        RegistryScope.EnsureVisible(visible ? (object)true : null, await db.CollectionBookings.AnyAsync(b => b.Id == id, ct), "Booking", id);
+
+        if (request.Status == BookingStatus.Completed && BookingStatusRules.ExplainWeight(request.ActualQuantityKg) is { } badWeight)
+            throw new RequestValidationException(nameof(request.ActualQuantityKg), badWeight);
+
+        var today = calendar.Today;
+        var (from, changed) = await SerializableTransaction.RunAsync(db, async () =>
+        {
+            var booking = await db.CollectionBookings.Include(b => b.Slot).FirstAsync(b => b.Id == id, ct);
+            var was = booking.Status;
+
+            // Already there: a double click, or two staff at once. Nothing to do.
+            if (was == request.Status)
+                return (was, false);
+
+            if (BookingStatusRules.ExplainRecord(was, request.Status, booking.Slot.SlotDate, today) is { } refusal)
+                throw new BusinessRuleException("ILLEGAL_BOOKING_TRANSITION", refusal);
+
+            booking.Status = request.Status;
+            if (request.Status == BookingStatus.Completed)
+                booking.ActualQuantityKg = request.ActualQuantityKg;
+            return (was, true);
+        }, "This booking was being updated at the same moment. Reload to see where it is.", ct);
+
+        if (changed)
+            logger.LogInformation("Booking {BookingId} {From} → {To} by {UserId}{Weight}", id, from, request.Status, currentUser.UserId,
+                request.Status == BookingStatus.Completed ? $", {request.ActualQuantityKg} kg delivered" : "");
+        return await GetAsync(id, ct);
+    }
+
     private async Task<CollectionBookingDto> GetAsync(Guid id, CancellationToken ct) =>
         ToDto(await db.CollectionBookings.AsNoTracking().Where(b => b.Id == id).Select(BookingRow).FirstAsync(ct));
 
@@ -260,16 +302,16 @@ public sealed class CollectionService(
     private sealed record BookingRowData(
         Guid Id, string BookingNo, BookingStatus Status, Guid SlotId, string CentreName, DateOnly SlotDate, TimeOnly StartTime,
         TimeOnly EndTime, Guid CropCycleId, string PlotCode, string CropName, string FarmerName, decimal QuantityKg,
-        decimal PlotLatitude, decimal PlotLongitude, decimal CentreLatitude, decimal CentreLongitude, DateTime CreatedAt);
+        decimal? ActualQuantityKg, decimal PlotLatitude, decimal PlotLongitude, decimal CentreLatitude, decimal CentreLongitude, DateTime CreatedAt);
 
     private static Expression<Func<CollectionBooking, BookingRowData>> BookingRow => b => new BookingRowData(
         b.Id, b.BookingNo, b.Status, b.SlotId, b.Slot.Centre.Name, b.Slot.SlotDate, b.Slot.StartTime, b.Slot.EndTime,
         b.CropCycleId, b.CropCycle.Plot.PlotCode, b.CropCycle.Crop.Name, b.Farmer.FullName, b.QuantityKg,
-        b.CropCycle.Plot.Latitude, b.CropCycle.Plot.Longitude, b.Slot.Centre.Latitude, b.Slot.Centre.Longitude, b.CreatedAt);
+        b.ActualQuantityKg, b.CropCycle.Plot.Latitude, b.CropCycle.Plot.Longitude, b.Slot.Centre.Latitude, b.Slot.Centre.Longitude, b.CreatedAt);
 
     private static CollectionBookingDto ToDto(BookingRowData r) => new(
         r.Id, r.BookingNo, r.Status, r.SlotId, r.CentreName, r.SlotDate, r.StartTime, r.EndTime, r.CropCycleId,
-        r.PlotCode, r.CropName, r.FarmerName, r.QuantityKg,
+        r.PlotCode, r.CropName, r.FarmerName, r.QuantityKg, r.ActualQuantityKg,
         Math.Round(SlotAllocation.DistanceKm(r.PlotLatitude, r.PlotLongitude, r.CentreLatitude, r.CentreLongitude), 1),
         r.CreatedAt);
 }

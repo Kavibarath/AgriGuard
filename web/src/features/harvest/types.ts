@@ -85,6 +85,14 @@ export interface CollectionSlot {
 
 export type BookingStatus = 'Booked' | 'CheckedIn' | 'Completed' | 'Cancelled' | 'NoShow'
 
+export const bookingStatusLabels: Record<BookingStatus, string> = {
+  Booked: 'Booked',
+  CheckedIn: 'Checked in',
+  Completed: 'Completed',
+  Cancelled: 'Cancelled',
+  NoShow: 'Missed',
+}
+
 export interface CollectionBooking {
   id: string
   bookingNo: string
@@ -99,6 +107,8 @@ export interface CollectionBooking {
   cropName: string
   farmerName: string
   quantityKg: number
+  /** Weighed at the centre; null until the delivery is completed. */
+  actualQuantityKg: number | null
   distanceKm: number
   createdAt: string
 }

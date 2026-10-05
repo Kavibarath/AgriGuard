@@ -43,6 +43,13 @@ public static class AuthPolicies
     /// <summary>Maintain regulatory rules, collection slots and users. Co-op Administrator only.</summary>
     public const string AdministersRules = "AdministersRules";
 
+    /// <summary>
+    /// Record what happens at a collection centre: check-in, weight, missed. Co-op staff, i.e. the
+    /// administrator (every centre) and field agronomists (their district). Never the farmer, who
+    /// cannot check themselves in.
+    /// </summary>
+    public const string RecordsCollections = "RecordsCollections";
+
     /// <summary>The /internal/* surface: the Python agent service, authenticated by X-Agent-Key. Never a user.</summary>
     public const string AgentService = "AgentService";
 }

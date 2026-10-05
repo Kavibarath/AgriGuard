@@ -439,6 +439,8 @@ class _MyBookings extends ConsumerWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('${b.bookingNo} · ${formatNumber(b.quantityKg)} kg ${b.cropName}', style: theme.textTheme.titleSmall),
+                                    if (b.actualQuantityKg case final kg?)
+                                      Text('Delivered ${formatNumber(kg)} kg, weighed at the centre', style: theme.textTheme.bodySmall),
                                     const SizedBox(height: 2),
                                     Text(
                                       '${b.centreName} · ${dayLabel(b.slotDate)} ${b.startTime}–${b.endTime} · ${b.distanceKm.toStringAsFixed(1)} km',
@@ -447,7 +449,7 @@ class _MyBookings extends ConsumerWidget {
                                     const SizedBox(height: 4),
                                     Row(
                                       children: [
-                                        StatusPill(label: _bookingLabel(b.status), tone: _bookingTone(b.status)),
+                                        StatusPill(label: b.statusLabel, tone: b.dayPassed && b.status == 'Booked' ? Tone.neutral : _bookingTone(b.status)),
                                         const Spacer(),
                                         // Kept apart from the details, so it is not pressed by accident.
                                         if (b.canCancel)
@@ -481,12 +483,6 @@ class _MyBookings extends ConsumerWidget {
       ],
     );
   }
-
-  static String _bookingLabel(String status) => switch (status) {
-        'CheckedIn' => 'Checked in',
-        'NoShow' => 'Missed',
-        _ => status,
-      };
 
   /// BookingStatus on the server: Booked, CheckedIn, Completed, Cancelled, NoShow.
   static Tone _bookingTone(String status) => switch (status) {

@@ -35,6 +35,9 @@ public static class AuthorizationSetup
 
             options.AddPolicy(AuthPolicies.AdministersRules, RoleIn(UserRole.CoopAdministrator));
 
+            // The co-op's staff at the collection centre; the booking's own district scope applies on top.
+            options.AddPolicy(AuthPolicies.RecordsCollections, RoleIn(UserRole.FieldAgronomist, UserRole.CoopAdministrator));
+
             // Everyone with a legitimate interest in farm data; the dealer is not one of them.
             options.AddPolicy(AuthPolicies.OwnsFarm,
                 RoleIn(UserRole.Farmer, UserRole.FieldAgronomist, UserRole.CoopAdministrator));

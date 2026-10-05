@@ -104,6 +104,7 @@ class CollectionBooking {
     required this.plotCode,
     required this.cropName,
     required this.quantityKg,
+    this.actualQuantityKg,
     required this.distanceKm,
   });
 
@@ -118,6 +119,7 @@ class CollectionBooking {
         plotCode: json['plotCode'] as String,
         cropName: json['cropName'] as String,
         quantityKg: (json['quantityKg'] as num).toDouble(),
+        actualQuantityKg: (json['actualQuantityKg'] as num?)?.toDouble(),
         distanceKm: (json['distanceKm'] as num).toDouble(),
       );
 
@@ -133,7 +135,25 @@ class CollectionBooking {
   final String plotCode;
   final String cropName;
   final double quantityKg;
+
+  /// Weighed at the centre; null until the delivery is completed.
+  final double? actualQuantityKg;
   final double distanceKm;
 
-  bool get canCancel => status == 'Booked';
+  /// The collection day is behind us. The server refuses to cancel it (SLOT_PASSED), so the
+  /// phone does not offer to.
+  bool get dayPassed {
+    final now = DateTime.now();
+    return slotDate.isBefore(DateTime(now.year, now.month, now.day));
+  }
+
+  bool get canCancel => status == 'Booked' && !dayPassed;
+
+  /// "Booked", "Checked in", "Missed"…, or "Day passed" for a booking whose day went by unrecorded.
+  String get statusLabel => switch (status) {
+        'Booked' when dayPassed => 'Day passed',
+        'CheckedIn' => 'Checked in',
+        'NoShow' => 'Missed',
+        _ => status,
+      };
 }

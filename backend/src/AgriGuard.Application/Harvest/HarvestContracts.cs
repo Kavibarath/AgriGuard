@@ -111,9 +111,17 @@ public sealed record CollectionBookingDto(
     string CropName,
     string FarmerName,
     decimal QuantityKg,
+    // What the centre weighed on the day; null until the delivery is completed.
+    decimal? ActualQuantityKg,
     // Straight-line distance from the plot to the centre.
     double DistanceKm,
     DateTime CreatedAt);
+
+/// <summary>
+/// Records the next step at the collection centre: CheckedIn, Completed (with the weight) or NoShow.
+/// Naming the target status makes a repeated click harmless.
+/// </summary>
+public sealed record RecordBookingRequest(BookingStatus Status, decimal? ActualQuantityKg = null);
 
 public sealed record AllocateBookingRequest(
     Guid CropCycleId,
@@ -140,4 +148,7 @@ public interface ICollectionService
     Task<CollectionBookingDto> AllocateAsync(AllocateBookingRequest request, CancellationToken ct = default);
 
     Task<CollectionBookingDto> CancelAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Co-op staff at the centre: check in, weigh and complete, or mark missed (<see cref="BookingStatusRules"/>).</summary>
+    Task<CollectionBookingDto> RecordAsync(Guid id, RecordBookingRequest request, CancellationToken ct = default);
 }
