@@ -76,7 +76,8 @@ can replace Groq by changing the three `AGENT_LLM_*` values.
 - **API:** `ConnectionStrings__Default`, `Jwt__SigningKey`, `AgentService__ApiKey`,
   `AgentService__BaseUrl`, `AgentService__DispatchTimeout`, `Cors__AllowedOrigins__0`,
   `Payments__PublicBaseUrl`, `Payments__Stripe__SecretKey`, `Payments__Stripe__WebhookSecret`,
-  `ForwardedHeaders__Enabled`, `Swagger__Enabled`, `Calendar__TimeZone`, `Seed__DemoUsers`
+  `ForwardedHeaders__Enabled`, `Swagger__Enabled`, `Calendar__TimeZone`, `Seed__DemoUsers`,
+  `OpenMeteo__BaseUrl`
 - **Agent service:** `AGENT_API_KEY`, `AGENT_API_BASE_URL`, `AGENT_LLM_PROVIDER`,
   `AGENT_LLM_BASE_URL`, `AGENT_LLM_API_KEY`, `AGENT_LLM_MODEL`,
   `AGENT_LLM_REASONING_EFFORT`
