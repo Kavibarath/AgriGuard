@@ -21,6 +21,8 @@ const users = [
  */
 const credits = [
   { href: 'https://open-meteo.com/', label: 'Weather forecasts: Open-Meteo' },
+  // MET Norway's data licence (CC BY 4.0) asks for this credit; it answers when Open-Meteo cannot.
+  { href: 'https://api.met.no/', label: 'Weather fallback: MET Norway' },
   { href: 'https://www.openstreetmap.org/copyright', label: 'Map tiles: © OpenStreetMap contributors' },
   { href: 'https://www.pexels.com/video/green-plants-on-the-field-7983392/', label: 'Field video: Andi Farruku on Pexels' },
 ]

@@ -50,6 +50,30 @@ V8 is "not evaluated" with the reason, the spray-window screen says the forecast
 and the agent proposes the earliest safe date. Nothing fails because the weather service is down.
 Tested by `When_Open_Meteo_is_down_V8_is_not_evaluated_and_nothing_fails`.
 
+## The MET Norway fallback (added 6 Oct 2026, for the deployment)
+
+On Render, Open-Meteo answered every request with **429 Too Many Requests**. Its free API limits
+each IP address, and Render's free services share their outgoing addresses with many other
+customers. So `IWeatherProvider` is now `FallbackWeatherProvider`: Open-Meteo first (with the same
+retries and breaker), then `MetNorwayClient` (api.met.no, Locationforecast 2.0) when Open-Meteo
+throws. MET Norway identifies callers by the `User-Agent` we must send (app name and contact),
+not by address. Only when both fail does `WeatherService` degrade as above. `MetNorway:Enabled=false`
+switches the fallback off.
+
+What the viva may ask:
+- **MET Norway gives no rain probability outside the Nordics**, only the forecast amount. We take the
+  forecast as stated: an hour with ≥ 0.1 mm counts as 100%, otherwise 0%. V8 still needs ≥ 0.5 mm in
+  the rainfast window too, so drizzle alone never blocks a spray. This is stricter than Open-Meteo's
+  probabilities: a forecast shower becomes a certain one.
+- **Its steps are hourly for about 2½ days, then 6-hourly** to about 9½ days. A 6-hour amount is
+  spread evenly over its hours and stops at the next step. A step with no rain figure is skipped,
+  never read as dry (the same rule as Open-Meteo's missing values). Spray dates beyond the horizon
+  are "not evaluated".
+- **No past days**, so the Diagnosis agent's "recent weather" is empty when the fallback answered.
+- **Attribution:** MET Norway's data is CC BY 4.0, credited in the web home page's footer.
+- Tests: `MetNorwayClientTests` (a recorded response for Kandapola) and `FallbackWeatherProviderTests`
+  (stubbed HTTP: first choice, refusal → fallback, fallback off, both fail).
+
 ## The agent's use of weather
 
 - **Diagnosis** calls `get_weather_forecast` and reads the last 48 h of rain and humidity. Wet,

@@ -75,7 +75,7 @@ public sealed class SprayWindowService(
 
         var forecast = await weather.ForecastAsync(plot.Latitude, plot.Longitude, ct);
         if (forecast is null)
-            return new SprayWindowDto(plotId, plot.PlotCode, false, "Open-Meteo", null, rainfastHours, productName,
+            return new SprayWindowDto(plotId, plot.PlotCode, false, WeatherSources.Label, null, rainfastHours, productName,
                 "The weather forecast is unavailable right now, so spray timing cannot be checked.", null, null, [], thresholds);
 
         var today = calendar.Today;
@@ -87,7 +87,7 @@ public sealed class SprayWindowService(
         var (recentRain, recentHumidity) = Recent(forecast.Hours, today);
 
         return new SprayWindowDto(
-            plotId, plot.PlotCode, true, "Open-Meteo", forecast.FetchedAt, rainfastHours, productName,
+            plotId, plot.PlotCode, true, WeatherSources.Label, forecast.FetchedAt, rainfastHours, productName,
             Summarise(assessed), recentRain, recentHumidity,
             [.. assessed.Select(d => new SprayDayDto(d.Date, d.Suitable, d.RainProbabilityPercent, d.WindSpeedKph,
                 d.TemperatureC, d.PrecipitationMm, d.Problems))],
