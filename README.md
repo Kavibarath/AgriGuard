@@ -37,11 +37,11 @@ demo data are sample data.
 
 | | URL |
 |---|---|
-| Web console (React) | `https://<web>.vercel.app` *(to be filled in)* |
-| API health | `https://<api>.onrender.com/health` *(to be filled in)* |
-| API reference (Swagger) | `https://<api>.onrender.com/swagger` *(to be filled in)* |
-| Agent service health | `https://<agent>.onrender.com/health` *(to be filled in)* |
-| Android APK | GitHub **Releases** → `app-release.apk` *(to be filled in)* |
+| Web console (React) | <https://agri-guard-xi.vercel.app> |
+| API health | <https://agriguard-api-6ysa.onrender.com/health> |
+| API reference (Swagger) | <https://agriguard-api-6ysa.onrender.com/swagger> |
+| Agent service health | <https://agriguard-agent.onrender.com/health> |
+| Android APK | <https://github.com/Kavibarath/AgriGuard/releases/download/v1.0.0/app-release.apk> ([release page](https://github.com/Kavibarath/AgriGuard/releases/tag/v1.0.0)) |
 
 The services run on free plans: PostgreSQL on **Neon**, the API and the agent service on
 **Render** (Docker, Singapore), the web console on **Vercel**, and the language model on **Groq**.
@@ -166,7 +166,7 @@ Source: `backend/src/AgriGuard.Domain/Validation/PrescriptionSafetyValidator.cs`
 | **D** | Harvest Windows, Collection & Regional Intelligence | Safe harvest days (maturity ∩ PHI ∩ weather); capacity-constrained slot booking and check-in; the regional outbreak signal | Diagnosis / Field Intelligence |
 
 Each component has a paginated, searchable, filterable list API, a status workflow and a report
-endpoint. Which files belong to which component: [docs/COMPONENT-OWNERSHIP.md](docs/COMPONENT-OWNERSHIP.md).
+endpoint.
 
 ---
 
@@ -196,7 +196,7 @@ backend/
 agent/                           the four LangGraph agents (FastAPI service), their tests and Dockerfile
 web/                             the React web console (vercel.json: SPA rewrite for Vercel)
 mobile/                          the Flutter phone app
-docs/                            plan, design notes, study notes (handover/), guides
+docs/                            plan, design notes, guides
 docker-compose.yml               local PostgreSQL
 render.yaml                      Render Blueprint for the API and the agent service
 ```
@@ -351,7 +351,7 @@ dotnet user-secrets set "Payments:Stripe:SecretKey" "sk_test_..." --project back
 
 AgriGuard never sees a card number. An order counts as paid only when the API reads the payment
 back from Stripe with its own key, and the amount matches. Live keys are refused at startup. With
-no key, card payments are simply switched off. Details: [docs/handover/payments.md](docs/handover/payments.md).
+no key, card payments are simply switched off.
 
 ---
 
@@ -384,10 +384,6 @@ migrations to the deployed database when a local network blocks PostgreSQL.
 | [docs/PROJECT-PLAN.md](docs/PROJECT-PLAN.md) | The full project plan and its decisions |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | The live deployment step by step (Neon, Render, Groq, Vercel, APK), its environment variables and the smoke test |
 | [docs/MANUAL-TEST-GUIDE.md](docs/MANUAL-TEST-GUIDE.md) | An end-to-end manual test of the whole system, with a checklist |
-| [docs/DEMO-AGRONOMIST.md](docs/DEMO-AGRONOMIST.md) | A step-by-step demo of every page the field agronomist has |
-| [docs/COMPONENT-OWNERSHIP.md](docs/COMPONENT-OWNERSHIP.md) | Which files make up each component |
-| [docs/STARTER-TASKS.md](docs/STARTER-TASKS.md) | Starter tasks for each student |
-| [docs/handover/](docs/handover/) | Study notes on the key designs: the validator, the approval transaction, triage, stock, weather and V8, harvest and collection, outbreaks, payments, JWT |
 | [docs/design/](docs/design/) | Design tokens, the UI brief and image credits |
 
 ---
