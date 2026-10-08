@@ -364,6 +364,13 @@ The phone gives up on a request after 30 seconds, so **wake the system before an
 
 That is why `warm-up.yml` runs only when you click it.
 
+**If a run is started while the agent sleeps:** Render answers the API's "start run" request
+with 502/503 until the agent is listening. The API retries those two statuses only (they mean the
+request never reached the agent), waiting 3 s, 6 s, 12 s… within `AgentService__DispatchTimeout`
+(90 s). The agent ignores a run id it has already accepted, so a repeat can never start a run
+twice. If the agent still isn't up after 90 s, the run fails with "may still be starting up";
+tap **Ask the AI again** a minute later.
+
 ---
 
 ## 7. Optional: card payments (Stripe test mode)

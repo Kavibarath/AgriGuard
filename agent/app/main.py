@@ -8,6 +8,7 @@ immediately in the React console, because every step posts to the backend as it 
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -23,6 +24,10 @@ from .runner import execute_run
 
 log = structlog.get_logger(__name__)
 
+# How many accepted run ids are remembered for duplicate detection. A repeat arrives within
+# seconds, so this only has to outlast a burst of retries, not the life of the process.
+ACCEPTED_RUNS_REMEMBERED = 1000
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -33,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
         app.state.provider = create_provider(client, settings)
         app.state.llm = StructuredLlm(app.state.provider, settings)
+        app.state.accepted_runs = OrderedDict()
         log.info("agent_service_started", provider=settings.llm_provider, model=settings.llm_model)
         yield
 
@@ -79,6 +85,16 @@ async def start_run(
 ) -> dict[str, str]:
     settings: Settings = app.state.settings
     _authorise(settings, x_agent_key)
+
+    # The backend may send the same run twice: it retries while a sleeping cloud instance wakes
+    # up. A run id already accepted is acknowledged again but never started a second time.
+    accepted: OrderedDict[str, None] = app.state.accepted_runs
+    if request.run_id in accepted:
+        log.info("run_already_accepted", run_id=request.run_id)
+        return {"runId": request.run_id, "status": "accepted"}
+    accepted[request.run_id] = None
+    while len(accepted) > ACCEPTED_RUNS_REMEMBERED:
+        accepted.popitem(last=False)
 
     background.add_task(execute_run, request, app.state.llm, app.state.http, settings)
     log.info("run_accepted", run_id=request.run_id, case_id=request.case_id)

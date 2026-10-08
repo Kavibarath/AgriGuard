@@ -23,6 +23,13 @@ public sealed class AgentServiceOptions
     public TimeSpan DispatchTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// First wait before trying again when the host answers 502/503 because the agent is still
+    /// starting (a free cloud instance waking from sleep). Doubles each time; all attempts together
+    /// stay within <see cref="DispatchTimeout"/>.
+    /// </summary>
+    public TimeSpan WakeRetryDelay { get; set; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>
     /// A run that has not reported a result by now is marked TimedOut. The agent enforces its own
     /// 5-minute limit; this is the backstop for when the agent process itself dies mid-run.
     /// </summary>
@@ -47,6 +54,9 @@ public sealed class AgentServiceOptionsValidator : IValidateOptions<AgentService
 
         if (options.DispatchTimeout <= TimeSpan.Zero)
             failures.Add("AgentService:DispatchTimeout must be positive.");
+
+        if (options.WakeRetryDelay <= TimeSpan.Zero)
+            failures.Add("AgentService:WakeRetryDelay must be positive.");
 
         if (options.RunTimeout < TimeSpan.FromMinutes(1))
             failures.Add("AgentService:RunTimeout must be at least one minute.");
