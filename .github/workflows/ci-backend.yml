@@ -87,7 +87,7 @@ jobs:
           --collect "XPlat Code Coverage"
 
       - name: Publish test results
-        uses: dorny/test-reporter@v3.0.0
+        uses: dorny/test-reporter@v3.2.0
         if: ${{ !cancelled() }}
         with:
           name: Backend tests
@@ -96,7 +96,7 @@ jobs:
           fail-on-error: true
 
       - name: Upload test results and coverage
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: backend-test-results
