@@ -9,7 +9,6 @@ agronomist, a person, approves it before anything is prescribed. The prescriptio
 dealer order, paid by card or in cash and collected with a pickup code. When the crop is ready, the
 farmer books a safe harvest day and a collection slot.
 
-> *The AI proposes, the rules check, a person decides.*
 
 SLIIT SE3090, Assignment 1, 2026. An academic project: all names, places and figures in the
 demo data are sample data.
